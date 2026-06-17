@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Ґо</title>
+<meta name="theme-color" content="#1f1f1e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ґо">
+<link id="manifest-link" rel="manifest" href="#">
+<link id="apple-touch" rel="apple-touch-icon" href="#">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='12' fill='%231f1f1e'/><circle cx='32' cy='32' r='14' fill='%23dcb35c'/><circle cx='32' cy='32' r='8' fill='%231f1f1e'/></svg>">
+<style>
+/* ── Reset & base ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{height:100%;background:#1f1f1e}
+body{
+  height:100%;min-height:100vh;min-height:100dvh;
+  background:#1f1f1e;color:#d4d4d0;
+  font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;
+  font-size:14px;line-height:1.4;
+  user-select:none;-webkit-user-select:none;
+  touch-action:manipulation;overflow:hidden;
+}
+
+/* ── Layout root ── */
+#root{
+  display:flex;width:100%;height:100%;height:100dvh;
+  flex-direction:column;
+  background:#1f1f1e;
+}
+#root.landscape{flex-direction:row}
+
+/* ── Board side ── */
+#board-side{
+  flex:1;min-width:0;min-height:0;
+  display:flex;align-items:center;justify-content:center;
+  background:#1f1f1e;
+  padding:10px 10px 50px 10px; /* portrait default: bottom clears zen-btn */
+}
+#root.landscape #board-side{
+  padding:10px;
+}
+#root.zen #board-side{
+  padding:0;
+  flex:1;
+}
+
+/* ── Canvas wrapper (square) ── */
+#board-wrap{
+  position:relative;
+  /* fill available space as a square */
+  width:100%;height:100%;
+  display:flex;align-items:center;justify-content:center;
+}
+
+#go-canvas{
+  display:block;
+  cursor:crosshair;touch-action:none;border-radius:6px;
+  /* actual size set by JS */
+}
+
+/* ── Info panel ── */
+#info-panel{
+  background:#181817;
+  display:flex;flex-direction:column;gap:0;
+  overflow:hidden;
+  /* portrait: fixed height at bottom */
+  height:45vh;min-height:200px;max-height:340px;
+  flex-shrink:0;
+  border-top:1px solid #252523;
+}
+#root.landscape #info-panel{
+  width:46vw;max-width:420px;height:100%;
+  max-height:none;min-height:0;
+  border-top:none;border-left:1px solid #252523;
+}
+#root.zen #info-panel{display:none}
+
+/* ── Game controls top ── */
+#ctrl-bar{
+  display:flex;align-items:center;gap:6px;
+  padding:8px 12px;border-bottom:1px solid #252523;
+  flex-shrink:0;
+}
+.ctrl-btn{
+  background:#242422;color:#c8c8c4;
+  border:none;border-radius:5px;
+  padding:6px 12px;font-size:13px;
+  cursor:pointer;transition:background .15s;outline:none;
+  font-family:inherit;flex-shrink:0;
+}
+.ctrl-btn:active{background:#3a3a38}
+.ctrl-btn:disabled{opacity:.25;cursor:default}
+.ctrl-btn.accent{color:#dcb35c}
+
+/* ── Board size selector ── */
+#size-bar{
+  display:flex;align-items:center;gap:5px;flex-wrap:nowrap;
+  padding:6px 12px;border-bottom:1px solid #252523;
+  flex-shrink:0;
+}
+.size-btn{
+  background:#222221;color:#666;
+  border:none;border-radius:4px;
+  padding:4px 10px;font-size:12px;
+  cursor:pointer;transition:background .15s,color .15s;outline:none;
+  font-family:inherit;white-space:nowrap;
+}
+.size-btn.active{background:#2c2c2a;color:#dcb35c}
+
+/* Комі inline — flex-shrink:0 prevents squishing */
+#komi-wrap{
+  margin-left:auto;display:flex;align-items:center;gap:4px;
+  color:#555;font-size:11px;flex-shrink:0;
+}
+#komi-input{
+  width:40px;background:#222221;color:#d4d4d0;
+  border:1px solid #333;border-radius:4px;
+  padding:3px 4px;font-size:12px;text-align:center;
+  font-family:inherit;outline:none;-moz-appearance:textfield;
+  appearance:textfield;
+}
+#komi-input::-webkit-inner-spin-button,
+#komi-input::-webkit-outer-spin-button{-webkit-appearance:none}
+#komi-input:focus{border-color:#555}
+
+/* ── Mark bar ── */
+#mark-bar{
+  display:none;
+  padding:5px 12px;border-bottom:1px solid #252523;
+  font-size:11px;color:#777;align-items:center;gap:8px;flex-shrink:0;
+}
+#mark-bar.visible{display:flex}
+.mark-active-stone{
+  display:inline-block;width:8px;height:8px;border-radius:50%;
+  background:#3a3a3a;box-shadow:0 0 0 1px #888;
+  vertical-align:middle;margin:0 2px;
+}
+.mark-active-stone.w{background:#e8e8e4;box-shadow:0 0 0 1px #999}
+
+/* ── Score block ── */
+#score-section{
+  padding:7px 14px 6px;border-bottom:1px solid #252523;
+  flex-shrink:0;
+}
+#score-block{
+  display:grid;grid-template-columns:1fr auto auto;
+  gap:0;font-size:12px;
+}
+.sc-row{display:contents}
+.sc-label{color:#4a4a48;padding:2px 0;align-self:center;font-size:11px}
+.sc-b{color:#b0b0ac;text-align:right;padding:2px 10px 2px 4px}
+.sc-w{color:#b0b0ac;text-align:right;padding:2px 0}
+.sc-head{color:#3a3a38;font-size:10px;text-align:right;padding:0 10px 3px 4px}
+.sc-head-w{color:#3a3a38;font-size:10px;text-align:right;padding:0 0 3px}
+.sc-total .sc-label{color:#dcb35c;font-size:12px}
+.sc-total .sc-b,.sc-total .sc-w{color:#dcb35c;font-weight:600}
+.sc-winner{
+  grid-column:1/-1;text-align:center;
+  color:#dcb35c;font-size:12px;font-weight:600;
+  padding:4px 0 1px;letter-spacing:.02em;
+}
+
+/* ── History ── */
+#history-wrap{
+  flex:1;overflow-y:auto;overflow-x:hidden;
+  padding:7px 12px 8px;min-height:0;
+  scrollbar-width:thin;scrollbar-color:#2a2a28 transparent;
+}
+#history-wrap::-webkit-scrollbar{width:2px}
+#history-wrap::-webkit-scrollbar-thumb{background:#2a2a28;border-radius:2px}
+
+/* Flow layout — like text, wrapping to next line */
+#history-list{
+  display:flex;flex-wrap:wrap;gap:0 2px;
+  align-content:flex-start;
+}
+.h-item{
+  display:inline-flex;align-items:baseline;gap:2px;
+  white-space:nowrap;margin-right:6px;margin-bottom:3px;
+}
+.h-num{color:#2e2e2c;font-size:9px}
+.h-coord{color:#d0d0cc;font-size:12px;font-weight:500}
+.h-stone-b{font-size:8px;opacity:.7}
+.h-stone-w{font-size:8px;opacity:.7}
+.h-pass-item{color:#383836;font-size:10px;font-style:italic;margin-right:6px;margin-bottom:3px}
+
+/* ── Zen button ── */
+#zen-btn{
+  position:fixed;z-index:100;
+  background:rgba(24,24,23,.9);
+  border:1px solid #2e2e2c;border-radius:50%;
+  width:32px;height:32px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;color:#555;font-size:11px;
+  transition:color .2s;outline:none;
+  /* portrait default: above info panel */
+  bottom:calc(45vh + 8px);right:12px;
+}
+#root.landscape #zen-btn{bottom:12px;right:12px}
+#root.zen #zen-btn{bottom:14px;right:14px;color:#333}
+#zen-btn:active{color:#dcb35c}
+
+@media(max-height:600px){
+  #info-panel{height:42vh;min-height:180px}
+  #zen-btn:not(#root.landscape #zen-btn):not(#root.zen #zen-btn){bottom:calc(42vh + 6px)}
+}
+</style>
+</head>
+<body>
+<div id="root">
+
+  <div id="board-side">
+    <div id="board-wrap">
+      <canvas id="go-canvas"></canvas>
+    </div>
+  </div>
+
+  <div id="info-panel">
+
+    <!-- Controls -->
+    <div id="ctrl-bar">
+      <button class="ctrl-btn" id="pass-btn">Пас</button>
+      <button class="ctrl-btn" id="mark-toggle-btn" style="display:none">◐ Чорні</button>
+      <button class="ctrl-btn accent" id="finalize-btn" style="display:none">✓ Підрахувати</button>
+    </div>
+
+    <!-- Size + komi -->
+    <div id="size-bar">
+      <button class="size-btn active" data-size="9">9×9</button>
+      <button class="size-btn" data-size="13">13×13</button>
+      <button class="size-btn" data-size="19">19×19</button>
+      <div id="komi-wrap">
+        <span>Комі</span>
+        <input id="komi-input" type="number" value="6.5" step="0.5" min="0" max="9">
+      </div>
+    </div>
+
+    <!-- Mark bar -->
+    <div id="mark-bar">
+      Маркер:
+      <span id="mark-stone-icon" class="mark-active-stone"></span>
+      <span id="mark-color-text">Чорні</span>
+      — клік на порожню клітину
+    </div>
+
+    <!-- Score -->
+    <div id="score-section">
+      <div id="score-block">
+        <div class="sc-row">
+          <div></div>
+          <div class="sc-head">⚫</div>
+          <div class="sc-head-w">⚪</div>
+        </div>
+        <div class="sc-row">
+          <div class="sc-label">Територія</div>
+          <div class="sc-b" id="sc-terr-b">—</div>
+          <div class="sc-w" id="sc-terr-w">—</div>
+        </div>
+        <div class="sc-row">
+          <div class="sc-label">Захоплено</div>
+          <div class="sc-b" id="sc-cap-b">0</div>
+          <div class="sc-w" id="sc-cap-w">0</div>
+        </div>
+        <div class="sc-row">
+          <div class="sc-label">Комі</div>
+          <div class="sc-b">—</div>
+          <div class="sc-w" id="sc-komi-val">6.5</div>
+        </div>
+        <div class="sc-row sc-total">
+          <div class="sc-label">Разом</div>
+          <div class="sc-b" id="sc-total-b">—</div>
+          <div class="sc-w" id="sc-total-w">—</div>
+        </div>
+        <div id="sc-winner" class="sc-winner" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- History -->
+    <div id="history-wrap">
+      <div id="history-list"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<button id="zen-btn" title="Дзен">▶</button>
+
+<script>
+'use strict';
+
+const EMPTY=0,BLACK=1,WHITE=2;
+const LETTERS='ABCDEFGHJKLMNOPQRST'.split('');
+const STAR={
+  9:[[2,2],[2,6],[4,4],[6,2],[6,6]],
+  13:[[3,3],[3,9],[6,6],[9,3],[9,9]],
+  19:[[3,3],[3,9],[3,15],[9,3],[9,9],[9,15],[15,3],[15,9],[15,15]]
+};
+
+let SIZE=9,KOMI=6.5;
+let board,turn,koHash,captures,history,passCount,gameOver,lastMove;
+let markingMode=false,markColor=BLACK,territoryMarks,territoryMap;
+let cachedAutoTerritory=null; // computed once on marking entry, cleared after finalize
+let pad=0,cell=0,cxArr=[],cyArr=[];
+let hoverX=-1,hoverY=-1,zenMode=false;
+let histRenderedCount=0,histMoveCount=0;
+
+const bgCanvas=document.createElement('canvas');
+const bgCtx=bgCanvas.getContext('2d',{alpha:false});
+// Stone bitmap cache — rebuilt on resize, used via drawImage() in draw()
+const stoneCache={b:null,w:null,D:0,cR:0};
+const canvas=document.getElementById('go-canvas');
+const ctx=canvas.getContext('2d',{alpha:false,desynchronized:true});
+const root=document.getElementById('root');
+const zenBtn=document.getElementById('zen-btn');
+const passBtnEl=document.getElementById('pass-btn');
+const markToggleBtn=document.getElementById('mark-toggle-btn');
+const finalizeBtn=document.getElementById('finalize-btn');
+const markBar=document.getElementById('mark-bar');
+const markStoneIcon=document.getElementById('mark-stone-icon');
+const markColorText=document.getElementById('mark-color-text');
+const histList=document.getElementById('history-list');
+const histWrap=document.getElementById('history-wrap');
+const komiInput=document.getElementById('komi-input');
+const scTerrB=document.getElementById('sc-terr-b');
+const scTerrW=document.getElementById('sc-terr-w');
+const scCapB=document.getElementById('sc-cap-b');
+const scCapW=document.getElementById('sc-cap-w');
+const scKomiVal=document.getElementById('sc-komi-val');
+const scTotalB=document.getElementById('sc-total-b');
+const scTotalW=document.getElementById('sc-total-w');
+const scWinner=document.getElementById('sc-winner');
+
+/* ── Audio ── */
+let audioCtx=null;
+function playClick(){
+  try{
+    if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+    o.connect(g);g.connect(audioCtx.destination);
+    o.frequency.value=820;o.type='sine';
+    g.gain.setValueAtTime(.15,audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.07);
+    o.start();o.stop(audioCtx.currentTime+.07);
+  }catch(e){}
+}
+
+/* ── Zobrist ── */
+let ZH=null,zhHi=0,zhLo=0;
+function initZobrist(){
+  ZH=[[],[]];
+  for(let c=0;c<2;c++)
+    for(let i=0;i<SIZE*SIZE;i++)
+      ZH[c][i]=[Math.random()*0x100000|0,Math.random()*0x100000|0];
+  zhHi=0;zhLo=0;
+}
+function zKey(){return zhHi+'|'+zhLo}
+function zToggle(x,y,c){const i=y*SIZE+x,ci=c-1;zhHi^=ZH[ci][i][0];zhLo^=ZH[ci][i][1];}
+
+/* ── Orientation ── */
+function applyOrientation(){
+  const ls=window.innerWidth>window.innerHeight;
+  root.classList.toggle('landscape',ls&&!zenMode);
+  if(zenMode){
+    zenBtn.style.cssText='bottom:14px;right:14px';
+  } else if(ls){
+    zenBtn.style.cssText='bottom:12px;right:12px';
+  } else {
+    // portrait: sit just above the info panel (real measured height)
+    const panel=document.getElementById('info-panel');
+    const ph=panel.offsetHeight||Math.round(window.innerHeight*0.45);
+    zenBtn.style.cssText=`bottom:${ph+8}px;right:12px`;
+  }
+}
+
+/* ── Init ── */
+function init(){
+  board=Array.from({length:SIZE},()=>new Uint8Array(SIZE));
+  turn=BLACK;koHash=null;
+  captures={[BLACK]:0,[WHITE]:0};
+  history=[];passCount=0;gameOver=false;lastMove=null;
+  markingMode=false;markColor=BLACK;
+  territoryMarks=Array.from({length:SIZE},()=>new Uint8Array(SIZE));
+  territoryMap=null;hoverX=-1;hoverY=-1;
+  cachedAutoTerritory=null;
+  initZobrist();
+  resetPhaseUI();
+  updateScoreDisplay();
+  renderHistory();
+  resizeCanvas();
+}
+
+function resetPhaseUI(){
+  passBtnEl.style.display='';
+  markToggleBtn.style.display='none';
+  finalizeBtn.style.display='none';
+  markBar.classList.remove('visible');
+  scWinner.style.display='none';
+}
+
+/* ── Resize ── */
+let _rt=null;
+function resizeCanvas(){
+  clearTimeout(_rt);
+  _rt=setTimeout(()=>{
+    const side=document.getElementById('board-side');
+    const sr=side.getBoundingClientRect();
+    const dpr=window.devicePixelRatio||1;
+    // square: fit in available space with padding already applied via CSS
+    const S=Math.floor(Math.min(sr.width,sr.height));
+    if(S<60)return;
+    canvas.width=S*dpr;canvas.height=S*dpr;
+    canvas.style.width=S+'px';canvas.style.height=S+'px';
+
+    // zen: larger margin so edge stones never clip outside board area
+    // detail: coords need space, same margin works for both label + stone safety
+    pad=Math.round(S*dpr*(zenMode?0.075:0.058));
+    cell=(S*dpr-2*pad)/(SIZE-1);
+    cxArr=Array.from({length:SIZE},(_,i)=>pad+i*cell);
+    cyArr=Array.from({length:SIZE},(_,i)=>pad+i*cell);
+
+    rebuildStoneCache();
+    bgCanvas.width=S*dpr;bgCanvas.height=S*dpr;
+    drawBG();draw();
+  },80);
+}
+
+/* ── Draw BG ── */
+function drawBG(){
+  const W=bgCanvas.width;
+  bgCtx.fillStyle='#d4a84b';
+  const r=Math.max(4,W*0.012);
+  bgCtx.beginPath();
+  bgCtx.roundRect(0,0,W,W,r);
+  bgCtx.fill();
+
+  // grid
+  bgCtx.strokeStyle='#4a3206';
+  bgCtx.lineWidth=Math.max(.8,cell*.02);
+  bgCtx.beginPath();
+  for(let i=0;i<SIZE;i++){
+    bgCtx.moveTo(cxArr[i],cyArr[0]);bgCtx.lineTo(cxArr[i],cyArr[SIZE-1]);
+    bgCtx.moveTo(cxArr[0],cyArr[i]);bgCtx.lineTo(cxArr[SIZE-1],cyArr[i]);
+  }
+  bgCtx.stroke();
+
+  // star points
+  bgCtx.fillStyle='#4a3206';
+  for(const[sx,sy]of(STAR[SIZE]||[])){
+    bgCtx.beginPath();
+    bgCtx.arc(cxArr[sx],cyArr[sy],cell*.095,0,Math.PI*2);
+    bgCtx.fill();
+  }
+
+  // coords (detail mode only)
+  if(!zenMode){
+    const fs=Math.max(7,cell*.17);
+    bgCtx.font=`${fs}px -apple-system,Arial,sans-serif`;
+    bgCtx.fillStyle='rgba(60,36,4,.65)';
+    bgCtx.textAlign='center';bgCtx.textBaseline='middle';
+    for(let i=0;i<SIZE;i++){
+      bgCtx.fillText(LETTERS[i],cxArr[i],pad*.45);
+      bgCtx.fillText(LETTERS[i],cxArr[i],W-pad*.45);
+      bgCtx.fillText(SIZE-i,pad*.45,cyArr[i]);
+      bgCtx.fillText(SIZE-i,W-pad*.45,cyArr[i]);
+    }
+  }
+}
+
+/* ── Draw dynamic ── */
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(bgCanvas,0,0);
+
+  const r=cell*.46;
+
+  // territory marks (marking phase)
+  if(markingMode){
+    for(let y=0;y<SIZE;y++)
+      for(let x=0;x<SIZE;x++)
+        if(board[y][x]===EMPTY&&territoryMarks[y][x]){
+          ctx.save();ctx.globalAlpha=.45;
+          drawStone(cxArr[x],cyArr[y],r*.72,territoryMarks[y][x]);
+          ctx.restore();
+        }
+  }
+
+  // final territory dots
+  if(gameOver&&territoryMap){
+    for(let y=0;y<SIZE;y++)
+      for(let x=0;x<SIZE;x++)
+        if(board[y][x]===EMPTY&&territoryMap[y][x]){
+          ctx.beginPath();
+          ctx.arc(cxArr[x],cyArr[y],r*.34,0,Math.PI*2);
+          ctx.fillStyle=territoryMap[y][x]===BLACK?'#1a1a1a':'#f0f0ec';
+          ctx.fill();
+        }
+  }
+
+  // stones
+  for(let y=0;y<SIZE;y++)
+    for(let x=0;x<SIZE;x++)
+      if(board[y][x]!==EMPTY)
+        drawStone(cxArr[x],cyArr[y],r,board[y][x]);
+
+  // last move marker
+  if(lastMove){
+    const[lx,ly]=lastMove;
+    const c=board[ly][lx];
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cxArr[lx],cyArr[ly],r*.36,0,Math.PI*2);
+    ctx.strokeStyle=c===BLACK?'#dcb35c':'#555';
+    ctx.lineWidth=Math.max(1,cell*.048);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // hover ghost
+  if(!gameOver&&!markingMode&&hoverX>=0&&board[hoverY][hoverX]===EMPTY){
+    ctx.save();ctx.globalAlpha=.28;
+    drawStone(cxArr[hoverX],cyArr[hoverY],r,turn);
+    ctx.restore();
+  }
+}
+
+/* ── Stone bitmap cache ── */
+function rebuildStoneCache(){
+  const r=cell*.46;
+  const rb=r*1.06; // black: slightly larger
+  const margin=rb*1.9;
+  const D=Math.ceil(rb*2+margin*2);
+  const half=D/2;
+  function bake(radius,isBlack){
+    const oc=document.createElement('canvas');
+    oc.width=D;oc.height=D;
+    const ox=oc.getContext('2d',{alpha:true});
+    ox.shadowColor='rgba(0,0,0,.6)';
+    ox.shadowBlur=radius*.8;
+    ox.shadowOffsetX=radius*.1;ox.shadowOffsetY=radius*.17;
+    ox.beginPath();ox.arc(half,half,radius,0,Math.PI*2);
+    if(isBlack){
+      const g=ox.createRadialGradient(half-radius*.28,half-radius*.32,radius*.04,half,half,radius);
+      g.addColorStop(0,'#707070');g.addColorStop(.38,'#2e2e2e');g.addColorStop(1,'#0c0c0c');
+      ox.fillStyle=g;
+    } else {
+      const g=ox.createRadialGradient(half-radius*.28,half-radius*.32,radius*.04,half,half,radius);
+      g.addColorStop(0,'#ffffff');g.addColorStop(.45,'#e8e8e4');g.addColorStop(1,'#b4b4b0');
+      ox.fillStyle=g;
+    }
+    ox.fill();
+    ox.shadowColor='transparent';
+    ox.beginPath();ox.arc(half-radius*.26,half-radius*.27,radius*.15,0,Math.PI*2);
+    ox.fillStyle=isBlack?'rgba(255,255,255,.2)':'rgba(255,255,255,.72)';
+    ox.fill();
+    return oc;
+  }
+  stoneCache.b=bake(rb,true);
+  stoneCache.w=bake(r,false);
+  stoneCache.D=D;stoneCache.cR=rb;
+}
+
+function drawStone(cx,cy,r,color){
+  // Use pre-rendered bitmap when radius matches cached size (normal gameplay + hover)
+  const expectedR=color===BLACK?stoneCache.cR:cell*.46;
+  if(stoneCache.b&&Math.abs(r-expectedR)<1){
+    const D=stoneCache.D;
+    ctx.drawImage(color===BLACK?stoneCache.b:stoneCache.w,
+      Math.round(cx-D/2),Math.round(cy-D/2),D,D);
+    return;
+  }
+  // Direct fallback: ghost/marking stones at different radius
+  const rr=color===BLACK?r*1.06:r;
+  ctx.save();
+  ctx.shadowColor='rgba(0,0,0,.5)';
+  ctx.shadowBlur=rr*.6;ctx.shadowOffsetX=rr*.1;ctx.shadowOffsetY=rr*.15;
+  ctx.beginPath();ctx.arc(cx,cy,rr,0,Math.PI*2);
+  if(color===BLACK){
+    const g=ctx.createRadialGradient(cx-rr*.28,cy-rr*.32,rr*.04,cx,cy,rr);
+    g.addColorStop(0,'#707070');g.addColorStop(.38,'#2e2e2e');g.addColorStop(1,'#0c0c0c');
+    ctx.fillStyle=g;
+  } else {
+    const g=ctx.createRadialGradient(cx-rr*.28,cy-rr*.32,rr*.04,cx,cy,rr);
+    g.addColorStop(0,'#fff');g.addColorStop(.45,'#e8e8e4');g.addColorStop(1,'#b4b4b0');
+    ctx.fillStyle=g;
+  }
+  ctx.fill();
+  ctx.shadowColor='transparent';
+  ctx.beginPath();ctx.arc(cx-rr*.26,cy-rr*.27,rr*.15,0,Math.PI*2);
+  ctx.fillStyle=color===BLACK?'rgba(255,255,255,.2)':'rgba(255,255,255,.72)';
+  ctx.fill();
+  ctx.restore();
+}
+
+/* ── Input ── */
+function canvasXY(e){
+  const rect=canvas.getBoundingClientRect();
+  const dpr=window.devicePixelRatio||1;
+  const px=(e.clientX-rect.left)*dpr;
+  const py=(e.clientY-rect.top)*dpr;
+  let x=Math.round((px-pad)/cell);
+  let y=Math.round((py-pad)/cell);
+  x=Math.max(0,Math.min(SIZE-1,x));
+  y=Math.max(0,Math.min(SIZE-1,y));
+  const dx=px-cxArr[x],dy=py-cyArr[y];
+  if(dx*dx+dy*dy>(cell*.6)*(cell*.6))return{x:-1,y:-1};
+  return{x,y};
+}
+
+canvas.addEventListener('pointermove',e=>{
+  if(gameOver||markingMode)return;
+  const{x,y}=canvasXY(e);
+  if(x<0){if(hoverX>=0){hoverX=-1;draw();}return;}
+  if(x!==hoverX||y!==hoverY){hoverX=x;hoverY=y;draw();}
+});
+canvas.addEventListener('pointerleave',()=>{if(hoverX>=0){hoverX=-1;hoverY=-1;draw();}});
+canvas.addEventListener('pointerdown',e=>{
+  const{x,y}=canvasXY(e);if(x<0)return;
+  requestAnimationFrame(()=>{
+    if(markingMode){
+      if(board[y][x]!==EMPTY)return;
+      territoryMarks[y][x]=territoryMarks[y][x]===markColor?EMPTY:markColor;
+      draw();updateScoreDisplay();
+    } else {
+      if(gameOver||board[y][x]!==EMPTY)return;
+      playMove(x,y);
+    }
+  });
+});
+
+/* ── Game logic ── */
+function playMove(x,y){
+  const tb=board.map(r=>new Uint8Array(r));
+  const ph=zhHi,pl=zhLo;
+  tb[y][x]=turn;zToggle(x,y,turn);
+  const removed=removeCaptured(tb,3-turn);
+  if(!groupHasLib(tb,x,y,turn)&&removed.length===0){zhHi=ph;zhLo=pl;return;}
+  const newKey=zKey();
+  if(koHash&&koHash===newKey){zhHi=ph;zhLo=pl;return;}
+  const prevKey=ph+'|'+pl;
+  board=tb;lastMove=[x,y];
+  captures[turn]+=removed.length;
+  history.push({
+    board:board.map(r=>new Uint8Array(r)),
+    koHash,captures:{[BLACK]:captures[BLACK],[WHITE]:captures[WHITE]},
+    turn,lastMove:[x,y],zhHi,zhLo,
+    notation:LETTERS[x]+(SIZE-y),color:turn
+  });
+  koHash=removed.length===1?prevKey:null;
+  passCount=0;turn=3-turn;
+  playClick();
+  updateScoreDisplay();renderHistory();draw();
+}
+
+function groupInfo(bd,x,y,color,vis){
+  const group=[],queue=[y*SIZE+x];let alive=false;
+  while(queue.length){
+    const idx=queue.pop();if(vis[idx])continue;vis[idx]=1;
+    const cx=idx%SIZE,cy=(idx-cx)/SIZE;group.push([cx,cy]);
+    for(const[nx,ny]of[[cx-1,cy],[cx+1,cy],[cx,cy-1],[cx,cy+1]]){
+      if(nx<0||nx>=SIZE||ny<0||ny>=SIZE)continue;
+      if(bd[ny][nx]===EMPTY)alive=true;
+      else if(bd[ny][nx]===color&&!vis[ny*SIZE+nx])queue.push(ny*SIZE+nx);
+    }
+  }
+  return{alive,group};
+}
+function removeCaptured(bd,color){
+  const removed=[],vis=new Uint8Array(SIZE*SIZE);
+  for(let y=0;y<SIZE;y++)for(let x=0;x<SIZE;x++){
+    const idx=y*SIZE+x;
+    if(bd[y][x]===color&&!vis[idx]){
+      const{alive,group}=groupInfo(bd,x,y,color,vis);
+      if(!alive)for(const[gx,gy]of group){bd[gy][gx]=EMPTY;zToggle(gx,gy,color);removed.push([gx,gy]);}
+    }
+  }
+  return removed;
+}
+function groupHasLib(bd,x,y,color){return groupInfo(bd,x,y,color,new Uint8Array(SIZE*SIZE)).alive;}
+
+/* ── Territory ── */
+function computeAutoTerritory(){
+  const terr=Array.from({length:SIZE},()=>new Uint8Array(SIZE));
+  const vis=new Uint8Array(SIZE*SIZE);
+  for(let y=0;y<SIZE;y++)for(let x=0;x<SIZE;x++){
+    const idx=y*SIZE+x;
+    if(board[y][x]===EMPTY&&!vis[idx]){
+      const area=[],owners=new Set(),q=[idx];
+      while(q.length){
+        const i=q.pop();if(vis[i])continue;vis[i]=1;
+        const cx=i%SIZE,cy=(i-cx)/SIZE;area.push([cx,cy]);
+        for(const[nx,ny]of[[cx-1,cy],[cx+1,cy],[cx,cy-1],[cx,cy+1]]){
+          if(nx<0||nx>=SIZE||ny<0||ny>=SIZE)continue;
+          if(board[ny][nx]===EMPTY){if(!vis[ny*SIZE+nx])q.push(ny*SIZE+nx);}
+          else owners.add(board[ny][nx]);
+        }
+      }
+      const owner=owners.size===1?[...owners][0]:0;
+      for(const[ax,ay]of area)terr[ay][ax]=owner;
+    }
+  }
+  return terr;
+}
+function buildFinalMap(auto){
+  const m=Array.from({length:SIZE},()=>new Uint8Array(SIZE));
+  for(let y=0;y<SIZE;y++)for(let x=0;x<SIZE;x++)
+    if(board[y][x]===EMPTY)m[y][x]=auto[y][x]||territoryMarks[y][x]||0;
+  return m;
+}
+function calcScore(fm){
+  let tb=0,tw=0;
+  for(let y=0;y<SIZE;y++)for(let x=0;x<SIZE;x++)
+    if(board[y][x]===EMPTY){if(fm[y][x]===BLACK)tb++;else if(fm[y][x]===WHITE)tw++;}
+  return{terrB:tb,terrW:tw,capB:captures[BLACK],capW:captures[WHITE],
+    totalB:tb+captures[BLACK],totalW:tw+captures[WHITE]+KOMI};
+}
+
+/* ── Score display ── */
+function updateScoreDisplay(){
+  scCapB.textContent=captures[BLACK];
+  scCapW.textContent=captures[WHITE];
+  scKomiVal.textContent=KOMI;
+  if(markingMode||gameOver){
+    const auto=cachedAutoTerritory||computeAutoTerritory();
+    const fm=buildFinalMap(auto);
+    const sc=calcScore(fm);
+    scTerrB.textContent=sc.terrB;scTerrW.textContent=sc.terrW;
+    scTotalB.textContent=sc.totalB.toFixed(1);scTotalW.textContent=sc.totalW.toFixed(1);
+  } else {
+    scTerrB.textContent='—';scTerrW.textContent='—';
+    scTotalB.textContent='—';scTotalW.textContent='—';
+  }
+}
+function showFinalScore(){
+  const auto=cachedAutoTerritory||computeAutoTerritory();
+  cachedAutoTerritory=null; // no longer needed
+  territoryMap=buildFinalMap(auto);
+  const sc=calcScore(territoryMap);
+  scTerrB.textContent=sc.terrB;scTerrW.textContent=sc.terrW;
+  scCapB.textContent=sc.capB;scCapW.textContent=sc.capW;
+  scKomiVal.textContent=KOMI;
+  scTotalB.textContent=sc.totalB.toFixed(1);scTotalW.textContent=sc.totalW.toFixed(1);
+  const diff=Math.abs(sc.totalB-sc.totalW).toFixed(1);
+  scWinner.style.display='';
+  scWinner.textContent=sc.totalB>sc.totalW?`⚫ +${diff}`:sc.totalW>sc.totalB?`⚪ +${diff}`:'Нічия';
+  gameOver=true;draw();
+}
+
+/* ── History — incremental append, no full rebuild ── */
+function renderHistory(){
+  if(history.length===0){
+    histList.innerHTML='';
+    histRenderedCount=0;histMoveCount=0;
+    return;
+  }
+  for(let i=histRenderedCount;i<history.length;i++){
+    const h=history[i];
+    if(h.notation){
+      histMoveCount++;
+      const item=document.createElement('span');
+      item.className='h-item';
+      const stClass=h.color===BLACK?'h-stone-b':'h-stone-w';
+      const st=h.color===BLACK?'⚫':'⚪';
+      item.innerHTML=`<span class="h-num">${histMoveCount}.</span><span class="${stClass}">${st}</span><span class="h-coord">${h.notation}</span>`;
+      histList.appendChild(item);
+    } else if(h.pass){
+      const item=document.createElement('span');
+      item.className='h-pass-item';
+      item.textContent=(h.color===BLACK?'⚫':'⚪')+' пас';
+      histList.appendChild(item);
+    }
+  }
+  histRenderedCount=history.length;
+  histWrap.scrollTop=histWrap.scrollHeight;
+}
+
+/* ── Buttons ── */
+passBtnEl.onclick=()=>{
+  if(gameOver)return;
+  history.push({
+    board:board.map(r=>new Uint8Array(r)),
+    koHash,captures:{[BLACK]:captures[BLACK],[WHITE]:captures[WHITE]},
+    turn,lastMove,zhHi,zhLo,pass:true,color:turn
+  });
+  passCount++;lastMove=null;koHash=null;
+  if(passCount>=2){
+    markingMode=true;markColor=BLACK;
+    territoryMarks=Array.from({length:SIZE},()=>new Uint8Array(SIZE));
+    cachedAutoTerritory=computeAutoTerritory(); // board frozen — compute once
+    passBtnEl.style.display='none';
+    markToggleBtn.style.display='';
+    finalizeBtn.style.display='';
+    markBar.classList.add('visible');
+    updateMarkBar();updateScoreDisplay();draw();
+    return;
+  }
+  turn=3-turn;updateScoreDisplay();renderHistory();draw();
+};
+
+markToggleBtn.onclick=()=>{
+  markColor=markColor===BLACK?WHITE:BLACK;
+  updateMarkBar();
+};
+function updateMarkBar(){
+  markStoneIcon.className='mark-active-stone'+(markColor===WHITE?' w':'');
+  markColorText.textContent=markColor===BLACK?'Чорні':'Білі';
+  markToggleBtn.textContent='◐ '+(markColor===BLACK?'Чорні':'Білі');
+}
+
+finalizeBtn.onclick=()=>{
+  markingMode=false;
+  markToggleBtn.style.display='none';
+  finalizeBtn.style.display='none';
+  markBar.classList.remove('visible');
+  showFinalScore();
+};
+
+/* ── Size & Komi ── */
+document.querySelectorAll('.size-btn').forEach(btn=>{
+  btn.onclick=()=>{
+    document.querySelectorAll('.size-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    SIZE=parseInt(btn.dataset.size);
+    init();
+  };
+});
+komiInput.oninput=()=>{
+  const v=parseFloat(komiInput.value);
+  if(!isNaN(v)&&v>=0)KOMI=v;
+  scKomiVal.textContent=isNaN(v)?'—':v;
+  updateScoreDisplay();
+};
+komiInput.onblur=()=>{
+  if(isNaN(parseFloat(komiInput.value))){komiInput.value=6.5;KOMI=6.5;}
+};
+
+/* ── Zen ── */
+zenBtn.onclick=()=>{
+  zenMode=!zenMode;
+  root.classList.toggle('zen',zenMode);
+  zenBtn.textContent=zenMode?'◀':'▶';
+  applyOrientation();
+  resizeCanvas();
+};
+
+/* ── Resize & orientation ── */
+let _ot=null;
+const onResize=()=>{clearTimeout(_ot);_ot=setTimeout(()=>{applyOrientation();resizeCanvas();},80);};
+window.addEventListener('resize',onResize);
+window.addEventListener('orientationchange',()=>{clearTimeout(_ot);_ot=setTimeout(()=>{applyOrientation();resizeCanvas();},140);});
+
+/* ── PWA ── */
+(async()=>{
+  try{
+    const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="#1f1f1e"/><circle cx="32" cy="32" r="14" fill="#dcb35c"/><circle cx="32" cy="32" r="8" fill="#1f1f1e"/></svg>`;
+    const svgURL=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));
+    function toPng(url,s){return new Promise((res,rej)=>{const img=new Image();img.crossOrigin='anonymous';img.onload=()=>{const c=document.createElement('canvas');c.width=s;c.height=s;c.getContext('2d').drawImage(img,0,0,s,s);res(c.toDataURL('image/png'));};img.onerror=rej;img.src=url;});}
+    const icons=[];
+    for(const s of[192,512]){try{icons.push({src:await toPng(svgURL,s),sizes:`${s}x${s}`,type:'image/png'});}catch(e){}}
+    try{document.getElementById('apple-touch').href=await toPng(svgURL,180);}catch(e){}
+    document.getElementById('manifest-link').href=URL.createObjectURL(new Blob([JSON.stringify({name:'Ґо',short_name:'Ґо',start_url:location.pathname,display:'standalone',background_color:'#1f1f1e',theme_color:'#1f1f1e',icons})],{type:'application/json'}));
+    if('serviceWorker' in navigator){
+      const sw=`const C='go-v2';self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(C).then(c=>{try{return c.add(new Request(location.pathname,{cache:'no-cache'}));}catch(e){}}));});self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.map(k=>k!==C&&caches.delete(k)))));self.clients.claim();});self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;e.respondWith(caches.open(C).then(async c=>{const r=await c.match(e.request);if(r)return r;const nr=await fetch(e.request);if(nr&&nr.ok)c.put(e.request,nr.clone()).catch(()=>{});return nr;}).catch(()=>caches.match('/')));});`;
+      await navigator.serviceWorker.register(URL.createObjectURL(new Blob([sw],{type:'application/javascript'})),{scope:'./'});
+    }
+  }catch(e){}
+})();
+
+/* ── Start ── */
+applyOrientation();
+init();
+</script>
+</body>
+</html>
