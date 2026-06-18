@@ -14,7 +14,7 @@
 
 **Дошки** — 9×9, 13×13, 19×19. Вибір запускає нову гру.
 
-**Адаптивність** — портрет: дошка зверху, панель знизу. Альбом: дошка зліва, панель справа. Орієнтовано на iPhone 16e.
+**Адаптивність** — портрет: дошка зверху, панель знизу. Альбом: дошка зліва, панель справа.
 
 **Ефективність** — камені рендеряться через offscreen-canvas і `drawImage()`, тіні рахуються один раз при зміні розміру. Інкрементальна історія ходів — DOM не перебудовується кожного ходу. Територія рахується один раз при вході в режим маркування. Canvas з `alpha:false` і `desynchronized:true`.
 
@@ -47,7 +47,7 @@ A minimalist Go game for local use. One HTML file — nothing extra.
 
 **Board sizes** — 9×9, 13×13, 19×19. Selecting a size starts a new game.
 
-**Responsive** — portrait: board top, panel bottom. Landscape: board left, panel right. Optimized for iPhone 16e.
+**Responsive** — portrait: board top, panel bottom. Landscape: board left, panel right.
 
 **Performance** — stones rendered via offscreen canvas and `drawImage()`, shadows computed once on resize. Incremental move history — DOM is not rebuilt on every move. Territory computed once on entering marking mode. Canvas with `alpha:false` and `desynchronized:true`.
 
