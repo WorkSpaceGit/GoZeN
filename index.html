@@ -69,54 +69,54 @@ body{
   /* portrait: fixed height at bottom */
   height:45vh;min-height:200px;max-height:340px;
   flex-shrink:0;
-  border-top:1px solid #252523;
+  border-top:1px solid #333331;
 }
 #root.landscape #info-panel{
   width:46vw;max-width:420px;height:100%;
   max-height:none;min-height:0;
-  border-top:none;border-left:1px solid #252523;
+  border-top:none;border-left:1px solid #333331;
 }
 #root.zen #info-panel{display:none}
 
 /* ── Game controls top ── */
 #ctrl-bar{
   display:flex;align-items:center;gap:6px;
-  padding:8px 12px;border-bottom:1px solid #252523;
+  padding:8px 12px;border-bottom:1px solid #333331;
   flex-shrink:0;
 }
 .ctrl-btn{
-  background:#242422;color:#c8c8c4;
-  border:none;border-radius:5px;
+  background:transparent;color:#c8c8c4;
+  border:1px solid #333;border-radius:5px;
   padding:6px 12px;font-size:13px;
-  cursor:pointer;transition:background .15s;outline:none;
+  cursor:pointer;transition:border-color .15s,color .15s;outline:none;
   font-family:inherit;flex-shrink:0;
 }
-.ctrl-btn:active{background:#3a3a38}
+.ctrl-btn:active{border-color:#555}
 .ctrl-btn:disabled{opacity:.25;cursor:default}
-.ctrl-btn.accent{color:#dcb35c}
+.ctrl-btn.accent{color:#dcb35c;border-color:#dcb35c}
 
 /* ── Board size selector ── */
 #size-bar{
   display:flex;align-items:center;gap:5px;flex-wrap:nowrap;
-  padding:6px 12px;border-bottom:1px solid #252523;
+  padding:6px 12px;border-bottom:1px solid #333331;
   flex-shrink:0;
 }
 .size-btn{
-  background:#222221;color:#666;
-  border:none;border-radius:4px;
+  background:transparent;color:#666;
+  border:1px solid transparent;border-radius:4px;
   padding:4px 10px;font-size:12px;
-  cursor:pointer;transition:background .15s,color .15s;outline:none;
+  cursor:pointer;transition:color .15s,border-color .15s;outline:none;
   font-family:inherit;white-space:nowrap;
 }
-.size-btn.active{background:#2c2c2a;color:#dcb35c}
+.size-btn.active{color:#dcb35c;border-color:#dcb35c}
 
 /* Комі inline — flex-shrink:0 prevents squishing */
 #komi-wrap{
   margin-left:auto;display:flex;align-items:center;gap:4px;
-  color:#555;font-size:11px;flex-shrink:0;
+  color:#6a6a68;font-size:11px;flex-shrink:0;
 }
 #komi-input{
-  width:40px;background:#222221;color:#d4d4d0;
+  width:40px;background:transparent;color:#d4d4d0;
   border:1px solid #333;border-radius:4px;
   padding:3px 4px;font-size:12px;text-align:center;
   font-family:inherit;outline:none;-moz-appearance:textfield;
@@ -129,7 +129,7 @@ body{
 /* ── Mark bar ── */
 #mark-bar{
   display:none;
-  padding:5px 12px;border-bottom:1px solid #252523;
+  padding:5px 12px;border-bottom:1px solid #333331;
   font-size:11px;color:#777;align-items:center;gap:8px;flex-shrink:0;
 }
 #mark-bar.visible{display:flex}
@@ -142,7 +142,7 @@ body{
 
 /* ── Score block ── */
 #score-section{
-  padding:7px 14px 6px;border-bottom:1px solid #252523;
+  padding:7px 14px 6px;border-bottom:1px solid #333331;
   flex-shrink:0;
 }
 #score-block{
@@ -150,27 +150,38 @@ body{
   gap:0;font-size:12px;
 }
 .sc-row{display:contents}
-.sc-label{color:#4a4a48;padding:2px 0;align-self:center;font-size:11px}
-.sc-b{color:#b0b0ac;text-align:right;padding:2px 10px 2px 4px}
-.sc-w{color:#b0b0ac;text-align:right;padding:2px 0}
-.sc-head{color:#3a3a38;font-size:10px;text-align:right;padding:0 10px 3px 4px}
-.sc-head-w{color:#3a3a38;font-size:10px;text-align:right;padding:0 0 3px}
-.sc-total .sc-label{color:#dcb35c;font-size:12px}
-.sc-total .sc-b,.sc-total .sc-w{color:#dcb35c;font-weight:600}
+.sc-label{color:#6a6a68;padding:2px 0;align-self:center;font-size:11px}
+.sc-head{color:#6a6a68;font-size:10px;text-align:center;padding:0 10px 3px 4px}
+.sc-head-w{color:#6a6a68;font-size:10px;text-align:center;padding:0 0 3px}
+.sc-b{color:#b0b0ac;text-align:center;padding:2px 10px 2px 4px}
+.sc-w{color:#b0b0ac;text-align:center;padding:2px 0}
+.sc-total .sc-label{color:#f0f0ec;font-size:12px}
+.sc-total .sc-b,.sc-total .sc-w{color:#f0f0ec;font-weight:600}
 .sc-winner{
-  grid-column:1/-1;text-align:center;
-  color:#dcb35c;font-size:12px;font-weight:600;
-  padding:4px 0 1px;letter-spacing:.02em;
+  grid-column:1/-1;
+  display:flex;justify-content:center;
+  padding:4px 0 2px;
 }
+.sc-winner-inner{
+  display:inline-block;
+  font-size:12px;font-weight:600;letter-spacing:.02em;
+  border:1px solid #d4a84b;border-radius:3px;
+  background:#c49a3a;
+  padding:2px 10px;
+}
+.sc-winner-inner.w-black{color:#1a1008}
+.sc-winner-inner.w-white{color:#f0f0ec}
+.sc-winner-inner.w-draw{color:rgba(60,36,4,.65)}
 
 /* ── History ── */
 #history-wrap{
   flex:1;overflow-y:auto;overflow-x:hidden;
   padding:7px 12px 8px;min-height:0;
-  scrollbar-width:thin;scrollbar-color:#2a2a28 transparent;
+  background:#c49a3a;
+  scrollbar-width:thin;scrollbar-color:rgba(60,36,4,.4) transparent;
 }
 #history-wrap::-webkit-scrollbar{width:2px}
-#history-wrap::-webkit-scrollbar-thumb{background:#2a2a28;border-radius:2px}
+#history-wrap::-webkit-scrollbar-thumb{background:rgba(60,36,4,.4);border-radius:2px}
 
 /* Flow layout — like text, wrapping to next line */
 #history-list{
@@ -181,27 +192,36 @@ body{
   display:inline-flex;align-items:baseline;gap:2px;
   white-space:nowrap;margin-right:6px;margin-bottom:3px;
 }
-.h-num{color:#2e2e2c;font-size:9px}
-.h-coord{color:#d0d0cc;font-size:12px;font-weight:500}
-.h-stone-b{font-size:8px;opacity:.7}
-.h-stone-w{font-size:8px;opacity:.7}
-.h-pass-item{color:#383836;font-size:10px;font-style:italic;margin-right:6px;margin-bottom:3px}
+.h-num{color:rgba(60,36,4,.65);font-size:9px}
+/* чорний хід — темний текст на жовтому */
+.h-coord-b{color:#1a1008;font-size:12px;font-weight:600}
+/* білий хід — світлий текст на жовтому */
+.h-coord-w{color:#f0f0ec;font-size:12px;font-weight:600}
+/* пас — рамка, без заливки */
+.h-pass-item{
+  display:inline-flex;align-items:center;
+  font-size:10px;font-style:normal;
+  border:1px solid #d4a84b;border-radius:3px;
+  padding:0 4px;line-height:1.6;
+  margin-right:6px;margin-bottom:3px;
+}
+.h-pass-b{color:#1a1008}
+.h-pass-w{color:#f0f0ec}
 
 /* ── Zen button ── */
 #zen-btn{
   position:fixed;z-index:100;
-  background:rgba(24,24,23,.9);
-  border:1px solid #2e2e2c;border-radius:50%;
+  background:transparent;
+  border:1px solid #333;border-radius:50%;
   width:32px;height:32px;
   display:flex;align-items:center;justify-content:center;
   cursor:pointer;color:#555;font-size:11px;
-  transition:color .2s;outline:none;
-  /* portrait default: above info panel */
+  transition:color .2s,border-color .2s;outline:none;
   bottom:calc(45vh + 8px);right:12px;
 }
 #root.landscape #zen-btn{bottom:12px;right:12px}
-#root.zen #zen-btn{bottom:14px;right:14px;color:#333}
-#zen-btn:active{color:#dcb35c}
+#root.zen #zen-btn{bottom:14px;right:14px;color:#333;border-color:#2a2a28}
+#zen-btn:active{color:#dcb35c;border-color:#dcb35c}
 
 @media(max-height:600px){
   #info-panel{height:42vh;min-height:180px}
@@ -251,8 +271,8 @@ body{
       <div id="score-block">
         <div class="sc-row">
           <div></div>
-          <div class="sc-head">⚫</div>
-          <div class="sc-head-w">⚪</div>
+          <div class="sc-head">чорні</div>
+          <div class="sc-head-w">білі</div>
         </div>
         <div class="sc-row">
           <div class="sc-label">Територія</div>
@@ -274,7 +294,7 @@ body{
           <div class="sc-b" id="sc-total-b">—</div>
           <div class="sc-w" id="sc-total-w">—</div>
         </div>
-        <div id="sc-winner" class="sc-winner" style="display:none"></div>
+        <div id="sc-winner" class="sc-winner" style="display:none"><span id="sc-winner-inner" class="sc-winner-inner"></span></div>
       </div>
     </div>
 
@@ -745,7 +765,14 @@ function showFinalScore(){
   scTotalB.textContent=sc.totalB.toFixed(1);scTotalW.textContent=sc.totalW.toFixed(1);
   const diff=Math.abs(sc.totalB-sc.totalW).toFixed(1);
   scWinner.style.display='';
-  scWinner.textContent=sc.totalB>sc.totalW?`⚫ +${diff}`:sc.totalW>sc.totalB?`⚪ +${diff}`:'Нічия';
+  const inner=document.getElementById('sc-winner-inner');
+  if(sc.totalB>sc.totalW){
+    inner.textContent=`чорні +${diff}`;inner.className='sc-winner-inner w-black';
+  } else if(sc.totalW>sc.totalB){
+    inner.textContent=`білі +${diff}`;inner.className='sc-winner-inner w-white';
+  } else {
+    inner.textContent='нічия';inner.className='sc-winner-inner w-draw';
+  }
   gameOver=true;draw();
 }
 
@@ -762,14 +789,14 @@ function renderHistory(){
       histMoveCount++;
       const item=document.createElement('span');
       item.className='h-item';
-      const stClass=h.color===BLACK?'h-stone-b':'h-stone-w';
-      const st=h.color===BLACK?'⚫':'⚪';
-      item.innerHTML=`<span class="h-num">${histMoveCount}.</span><span class="${stClass}">${st}</span><span class="h-coord">${h.notation}</span>`;
+      const coordClass=h.color===BLACK?'h-coord-b':'h-coord-w';
+      item.innerHTML=`<span class="h-num">${histMoveCount}.</span><span class="${coordClass}">${h.notation}</span>`;
       histList.appendChild(item);
     } else if(h.pass){
       const item=document.createElement('span');
       item.className='h-pass-item';
-      item.textContent=(h.color===BLACK?'⚫':'⚪')+' пас';
+      const textClass=h.color===BLACK?'h-pass-b':'h-pass-w';
+      item.innerHTML=`<span class="${textClass}">пас</span>`;
       histList.appendChild(item);
     }
   }
