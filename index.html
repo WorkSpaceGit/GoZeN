@@ -78,10 +78,12 @@ body{
 }
 #root.zen #info-panel{display:none}
 
-/* ── Game controls top ── */
+/* ── Game controls — між score і history ── */
 #ctrl-bar{
   display:flex;align-items:center;gap:6px;
-  padding:8px 12px;border-bottom:1px solid #333331;
+  padding:8px 12px;
+  border-top:1px solid #333331;
+  border-bottom:1px solid #333331;
   flex-shrink:0;
 }
 .ctrl-btn{
@@ -240,14 +242,7 @@ body{
 
   <div id="info-panel">
 
-    <!-- Controls -->
-    <div id="ctrl-bar">
-      <button class="ctrl-btn" id="pass-btn">Пас</button>
-      <button class="ctrl-btn" id="mark-toggle-btn" style="display:none">◐ Чорні</button>
-      <button class="ctrl-btn accent" id="finalize-btn" style="display:none">✓ Підрахувати</button>
-    </div>
-
-    <!-- Size + komi -->
+    <!-- Size + komi — завжди вгорі, незмінно -->
     <div id="size-bar">
       <button class="size-btn active" data-size="9">9×9</button>
       <button class="size-btn" data-size="13">13×13</button>
@@ -258,15 +253,7 @@ body{
       </div>
     </div>
 
-    <!-- Mark bar -->
-    <div id="mark-bar">
-      Маркер:
-      <span id="mark-stone-icon" class="mark-active-stone"></span>
-      <span id="mark-color-text">Чорні</span>
-      — клік на порожню клітину
-    </div>
-
-    <!-- Score -->
+    <!-- Score — завжди на місці -->
     <div id="score-section">
       <div id="score-block">
         <div class="sc-row">
@@ -296,6 +283,21 @@ body{
         </div>
         <div id="sc-winner" class="sc-winner" style="display:none"><span id="sc-winner-inner" class="sc-winner-inner"></span></div>
       </div>
+    </div>
+
+    <!-- Controls — після рахунку, перед history -->
+    <div id="ctrl-bar">
+      <button class="ctrl-btn" id="pass-btn">Пас</button>
+      <button class="ctrl-btn" id="mark-toggle-btn" style="display:none">◐ Чорні</button>
+      <button class="ctrl-btn accent" id="finalize-btn" style="display:none">✓ Підрахувати</button>
+    </div>
+
+    <!-- Mark bar — разом з кнопками фази -->
+    <div id="mark-bar">
+      Маркер:
+      <span id="mark-stone-icon" class="mark-active-stone"></span>
+      <span id="mark-color-text">Чорні</span>
+      — клік на порожню клітину
     </div>
 
     <!-- History -->
