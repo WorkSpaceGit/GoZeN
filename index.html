@@ -225,6 +225,24 @@ body{
 #root.zen #zen-btn{bottom:14px;right:14px;color:#333;border-color:#2a2a28}
 #zen-btn:active{color:#dcb35c;border-color:#dcb35c}
 
+/* ── Binary clock ── */
+#bin-clock{
+  display:flex;align-items:flex-end;justify-content:center;
+  padding:6px 12px 5px;
+  border-bottom:1px solid #333331;
+  flex-shrink:0;gap:0;
+}
+.bc-group{display:flex;gap:0;align-items:flex-end}
+.bc-col{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px}
+.bc-bit{
+  border-radius:50%;
+  background:#3a3a38;
+  flex-shrink:0;
+}
+.bc-bit.on{background:#dcb35c}
+/* spacer між групами — ширина як у біта, висота 0 */
+.bc-spacer{flex-shrink:0}
+
 @media(max-height:600px){
   #info-panel{height:42vh;min-height:180px}
   #zen-btn:not(#root.landscape #zen-btn):not(#root.zen #zen-btn){bottom:calc(42vh + 6px)}
@@ -299,6 +317,9 @@ body{
       <span id="mark-color-text">Чорні</span>
       — клік на порожню клітину
     </div>
+
+    <!-- Binary clock — між кнопками і history -->
+    <div id="bin-clock" role="timer" aria-label="Бінарний годинник"></div>
 
     <!-- History -->
     <div id="history-wrap">
@@ -871,9 +892,113 @@ zenBtn.onclick=()=>{
   zenMode=!zenMode;
   root.classList.toggle('zen',zenMode);
   zenBtn.textContent=zenMode?'◀':'▶';
+  zenMode?wakeLockRequest():wakeLockRelease();
   applyOrientation();
   resizeCanvas();
 };
+
+/* ── Wake Lock — активний лише в дзен-режимі ── */
+let _wakeLock=null;
+async function wakeLockRequest(){
+  if(!('wakeLock' in navigator))return;
+  try{
+    if(_wakeLock)return;
+    _wakeLock=await navigator.wakeLock.request('screen');
+    _wakeLock.addEventListener('release',()=>{_wakeLock=null;});
+  }catch(e){}
+}
+async function wakeLockRelease(){
+  if(_wakeLock){try{await _wakeLock.release();}catch(e){}}_wakeLock=null;
+}
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'&&zenMode)wakeLockRequest();
+});
+
+/* ── Binary clock ── */
+(function initBinClock(){
+  const BIT_LENS=[2,4,3,4,3,4]; // H1,H2,M1,M2,S1,S2
+  const el=document.getElementById('bin-clock');
+  const bitRefs=[];
+  const bitState=[];
+  let clockTimer=null;
+
+  // Build DOM
+  BIT_LENS.forEach((len,i)=>{
+    const col=document.createElement('div');
+    col.className='bc-col';
+    const bits=[];
+    for(let j=0;j<len;j++){
+      const b=document.createElement('div');
+      b.className='bc-bit';
+      b.setAttribute('aria-hidden','true');
+      col.appendChild(b);
+      bits.push(b);
+    }
+    // wrap pairs into group
+    if(i%2===0){
+      const g=document.createElement('div');
+      g.className='bc-group';
+      g.appendChild(col);
+      el.appendChild(g);
+    } else {
+      el.lastElementChild.appendChild(col);
+      // spacer after each pair except last
+      if(i<BIT_LENS.length-1){
+        const sp=document.createElement('div');
+        sp.className='bc-spacer';
+        el.appendChild(sp);
+      }
+    }
+    bitRefs[i]=bits;
+    bitState[i]=Array(len).fill(null);
+  });
+
+  // Size bits dynamically based on panel width
+  function sizeBits(){
+    const panelW=el.offsetWidth||200;
+    // 6 cols + 2 spacers (each = 1 col width) = 8 units; 5 inner gaps per group pair
+    // groups: 3 pairs, 2 spacers between
+    // total cols=6, spacers=2, col-gaps=3*1(inner)=3 → 6+2=8 units + gaps
+    const colGap=2; // px between bits in same col (already in CSS gap:2px)
+    const groupGap=Math.floor(panelW/14); // spacer width
+    const bitSz=Math.floor((panelW-24-2*groupGap)/8); // 24px = padding*2
+    const sz=Math.max(6,Math.min(bitSz,20));
+    document.querySelectorAll('.bc-bit').forEach(b=>{
+      b.style.width=sz+'px';b.style.height=sz+'px';
+    });
+    document.querySelectorAll('.bc-spacer').forEach(s=>{
+      s.style.width=groupGap+'px';
+    });
+    // reset group gaps
+    document.querySelectorAll('.bc-group').forEach(g=>{
+      g.style.gap=Math.max(2,Math.floor(sz/4))+'px';
+    });
+  }
+
+  function tick(){
+    const now=new Date();
+    const digits=[
+      Math.floor(now.getHours()/10),now.getHours()%10,
+      Math.floor(now.getMinutes()/10),now.getMinutes()%10,
+      Math.floor(now.getSeconds()/10),now.getSeconds()%10
+    ];
+    digits.forEach((digit,i)=>{
+      const len=BIT_LENS[i];
+      for(let j=0;j<len;j++){
+        const isOn=((digit>>(len-1-j))&1)===1;
+        if(bitState[i][j]!==isOn){
+          bitState[i][j]=isOn;
+          bitRefs[i][j].className=isOn?'bc-bit on':'bc-bit';
+        }
+      }
+    });
+    clockTimer=setTimeout(tick,1000-(Date.now()%1000));
+  }
+
+  sizeBits();
+  window.addEventListener('resize',sizeBits);
+  requestAnimationFrame(tick);
+})();
 
 /* ── Resize & orientation ── */
 let _ot=null;
