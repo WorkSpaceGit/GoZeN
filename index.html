@@ -350,6 +350,7 @@ let markingMode=false,markColor=BLACK,territoryMarks,territoryMap;
 let cachedAutoTerritory=null; // computed once on marking entry, cleared after finalize
 let pad=0,cell=0,cxArr=[],cyArr=[];
 let hoverX=-1,hoverY=-1,zenMode=false;
+let _cachedRect=null;
 let histRenderedCount=0,histMoveCount=0;
 
 const bgCanvas=document.createElement('canvas');
@@ -466,6 +467,7 @@ function resizeCanvas(){
     cxArr=Array.from({length:SIZE},(_,i)=>pad+i*cell);
     cyArr=Array.from({length:SIZE},(_,i)=>pad+i*cell);
 
+    _cachedRect=null;
     rebuildStoneCache();
     bgCanvas.width=S*dpr;bgCanvas.height=S*dpr;
     drawBG();draw();
@@ -531,9 +533,9 @@ function draw(){
         for(let x=0;x<SIZE;x++){
           const i=y*SIZE+x;
           if(board[i]===EMPTY&&territoryMarks[i]){
-            ctx.save();ctx.globalAlpha=.45;
+            ctx.globalAlpha=.45;
             drawStone(cxArr[x],cyArr[y],r*.72,territoryMarks[i]);
-            ctx.restore();
+            ctx.globalAlpha=1;
           }
         }
     }
@@ -563,20 +565,18 @@ function draw(){
     if(lastMove){
       const[lx,ly]=lastMove;
       const c=board[ly*SIZE+lx];
-      ctx.save();
       ctx.beginPath();
       ctx.arc(cxArr[lx],cyArr[ly],r*.36,0,Math.PI*2);
       ctx.strokeStyle=c===BLACK?'#dcb35c':'#555';
       ctx.lineWidth=Math.max(1,cell*.048);
       ctx.stroke();
-      ctx.restore();
     }
 
     // hover ghost
     if(!gameOver&&!markingMode&&hoverX>=0&&board[hoverY*SIZE+hoverX]===EMPTY){
-      ctx.save();ctx.globalAlpha=.28;
+      ctx.globalAlpha=.28;
       drawStone(cxArr[hoverX],cyArr[hoverY],r,turn);
-      ctx.restore();
+      ctx.globalAlpha=1;
     }
   });
 }
@@ -651,7 +651,8 @@ function drawStone(cx,cy,r,color){
 
 /* ── Input ── */
 function canvasXY(e){
-  const rect=canvas.getBoundingClientRect();
+  if(!_cachedRect)_cachedRect=canvas.getBoundingClientRect();
+  const rect=_cachedRect;
   const dpr=window.devicePixelRatio||1;
   const px=(e.clientX-rect.left)*dpr;
   const py=(e.clientY-rect.top)*dpr;
@@ -933,6 +934,9 @@ async function wakeLockRelease(){
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'&&zenMode)wakeLockRequest();
 });
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible')clockTick();
+});
 
 /* ── Binary clock ── */
 (function initBinClock(){
@@ -940,6 +944,8 @@ document.addEventListener('visibilitychange',()=>{
   const el=document.getElementById('bin-clock');
   const bitRefs=[];
   const bitState=[];
+  const spacerRefs=[];
+  const groupRefs=[];
   let clockTimer=null;
 
   // Build DOM
@@ -960,6 +966,7 @@ document.addEventListener('visibilitychange',()=>{
       g.className='bc-group';
       g.appendChild(col);
       el.appendChild(g);
+      groupRefs.push(g);
     } else {
       el.lastElementChild.appendChild(col);
       // spacer after each pair except last
@@ -967,6 +974,7 @@ document.addEventListener('visibilitychange',()=>{
         const sp=document.createElement('div');
         sp.className='bc-spacer';
         el.appendChild(sp);
+        spacerRefs.push(sp);
       }
     }
     bitRefs[i]=bits;
@@ -976,23 +984,18 @@ document.addEventListener('visibilitychange',()=>{
   // Size bits dynamically based on panel width
   function sizeBits(){
     const panelW=el.offsetWidth||200;
-    // 6 cols + 2 spacers (each = 1 col width) = 8 units; 5 inner gaps per group pair
-    // groups: 3 pairs, 2 spacers between
-    // total cols=6, spacers=2, col-gaps=3*1(inner)=3 → 6+2=8 units + gaps
-    const colGap=2; // px between bits in same col (already in CSS gap:2px)
-    const groupGap=Math.floor(panelW/14); // spacer width
-    const bitSz=Math.floor((panelW-24-2*groupGap)/8); // 24px = padding*2
+    const groupGap=Math.floor(panelW/14);
+    const bitSz=Math.floor((panelW-24-2*groupGap)/8);
     const sz=Math.max(6,Math.min(bitSz,20));
-    document.querySelectorAll('.bc-bit').forEach(b=>{
-      b.style.width=sz+'px';b.style.height=sz+'px';
-    });
-    document.querySelectorAll('.bc-spacer').forEach(s=>{
-      s.style.width=groupGap+'px';
-    });
-    // reset group gaps
-    document.querySelectorAll('.bc-group').forEach(g=>{
-      g.style.gap=Math.max(2,Math.floor(sz/4))+'px';
-    });
+    const szPx=sz+'px';
+    for(let i=0;i<BIT_LENS.length;i++)
+      for(let j=0;j<bitRefs[i].length;j++){
+        bitRefs[i][j].style.width=szPx;bitRefs[i][j].style.height=szPx;
+      }
+    const spW=groupGap+'px';
+    for(let s=0;s<spacerRefs.length;s++) spacerRefs[s].style.width=spW;
+    const gGap=Math.max(2,Math.floor(sz/4))+'px';
+    for(let g=0;g<groupRefs.length;g++) groupRefs[g].style.gap=gGap;
   }
 
   function tick(){
@@ -1018,6 +1021,7 @@ document.addEventListener('visibilitychange',()=>{
   sizeBits();
   let _sbt=null;
   window.addEventListener('resize',()=>{clearTimeout(_sbt);_sbt=setTimeout(sizeBits,80);});
+  window.clockTick=tick; // expose for visibilitychange resync
   requestAnimationFrame(tick);
 })();
 
