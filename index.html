@@ -342,6 +342,7 @@ const STAR={
   13:[[3,3],[3,9],[6,6],[9,3],[9,9]],
   19:[[3,3],[3,9],[3,15],[9,3],[9,9],[9,15],[15,3],[15,9],[15,15]]
 };
+const DX=[-1,1,0,0],DY=[0,0,-1,1]; // BFS neighbor directions
 
 let SIZE=9,KOMI=6.5;
 let board,turn,koHash,captures,history,passCount,gameOver,lastMove;
@@ -358,6 +359,8 @@ const stoneCache={b:null,w:null,D:0,cR:0};
 const canvas=document.getElementById('go-canvas');
 const ctx=canvas.getContext('2d',{alpha:false,desynchronized:true});
 const root=document.getElementById('root');
+const boardSide=document.getElementById('board-side');
+const infoPanel=document.getElementById('info-panel');
 const zenBtn=document.getElementById('zen-btn');
 const passBtnEl=document.getElementById('pass-btn');
 const markToggleBtn=document.getElementById('mark-toggle-btn');
@@ -376,6 +379,7 @@ const scKomiVal=document.getElementById('sc-komi-val');
 const scTotalB=document.getElementById('sc-total-b');
 const scTotalW=document.getElementById('sc-total-w');
 const scWinner=document.getElementById('sc-winner');
+const scWinnerInner=document.getElementById('sc-winner-inner');
 
 /* ── Audio ── */
 let audioCtx=null;
@@ -412,21 +416,19 @@ function applyOrientation(){
   } else if(ls){
     zenBtn.style.cssText='bottom:12px;right:12px';
   } else {
-    // portrait: sit just above the info panel (real measured height)
-    const panel=document.getElementById('info-panel');
-    const ph=panel.offsetHeight||Math.round(window.innerHeight*0.45);
+    const ph=infoPanel.offsetHeight||Math.round(window.innerHeight*0.45);
     zenBtn.style.cssText=`bottom:${ph+8}px;right:12px`;
   }
 }
 
 /* ── Init ── */
 function init(){
-  board=Array.from({length:SIZE},()=>new Uint8Array(SIZE));
+  board=new Uint8Array(SIZE*SIZE);
   turn=BLACK;koHash=null;
   captures={[BLACK]:0,[WHITE]:0};
   history=[];passCount=0;gameOver=false;lastMove=null;
   markingMode=false;markColor=BLACK;
-  territoryMarks=Array.from({length:SIZE},()=>new Uint8Array(SIZE));
+  territoryMarks=new Uint8Array(SIZE*SIZE);
   territoryMap=null;hoverX=-1;hoverY=-1;
   cachedAutoTerritory=null;
   initZobrist();
@@ -449,8 +451,7 @@ let _rt=null;
 function resizeCanvas(){
   clearTimeout(_rt);
   _rt=setTimeout(()=>{
-    const side=document.getElementById('board-side');
-    const sr=side.getBoundingClientRect();
+    const sr=boardSide.getBoundingClientRect();
     const dpr=window.devicePixelRatio||1;
     // square: fit in available space with padding already applied via CSS
     const S=Math.floor(Math.min(sr.width,sr.height));
@@ -514,76 +515,86 @@ function drawBG(){
 }
 
 /* ── Draw dynamic ── */
+let _drawRaf=null;
 function draw(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.drawImage(bgCanvas,0,0);
+  if(_drawRaf)return; // вже заплановано на цей кадр
+  _drawRaf=requestAnimationFrame(()=>{
+    _drawRaf=null;
+    // drawImage(bgCanvas) повністю перекриває canvas
+    ctx.drawImage(bgCanvas,0,0);
 
-  const r=cell*.46;
+    const r=cell*.46;
 
-  // territory marks (marking phase)
-  if(markingMode){
-    for(let y=0;y<SIZE;y++)
-      for(let x=0;x<SIZE;x++)
-        if(board[y][x]===EMPTY&&territoryMarks[y][x]){
-          ctx.save();ctx.globalAlpha=.45;
-          drawStone(cxArr[x],cyArr[y],r*.72,territoryMarks[y][x]);
-          ctx.restore();
+    // territory marks (marking phase)
+    if(markingMode){
+      for(let y=0;y<SIZE;y++)
+        for(let x=0;x<SIZE;x++){
+          const i=y*SIZE+x;
+          if(board[i]===EMPTY&&territoryMarks[i]){
+            ctx.save();ctx.globalAlpha=.45;
+            drawStone(cxArr[x],cyArr[y],r*.72,territoryMarks[i]);
+            ctx.restore();
+          }
         }
-  }
+    }
 
-  // final territory dots
-  if(gameOver&&territoryMap){
-    for(let y=0;y<SIZE;y++)
-      for(let x=0;x<SIZE;x++)
-        if(board[y][x]===EMPTY&&territoryMap[y][x]){
-          ctx.beginPath();
-          ctx.arc(cxArr[x],cyArr[y],r*.34,0,Math.PI*2);
-          ctx.fillStyle=territoryMap[y][x]===BLACK?'#1a1a1a':'#f0f0ec';
-          ctx.fill();
+    // final territory dots
+    if(gameOver&&territoryMap){
+      for(let y=0;y<SIZE;y++)
+        for(let x=0;x<SIZE;x++){
+          const i=y*SIZE+x;
+          if(board[i]===EMPTY&&territoryMap[i]){
+            ctx.beginPath();
+            ctx.arc(cxArr[x],cyArr[y],r*.34,0,Math.PI*2);
+            ctx.fillStyle=territoryMap[i]===BLACK?'#1a1a1a':'#f0f0ec';
+            ctx.fill();
+          }
         }
-  }
+    }
 
-  // stones
-  for(let y=0;y<SIZE;y++)
-    for(let x=0;x<SIZE;x++)
-      if(board[y][x]!==EMPTY)
-        drawStone(cxArr[x],cyArr[y],r,board[y][x]);
+    // stones
+    for(let y=0;y<SIZE;y++)
+      for(let x=0;x<SIZE;x++){
+        const i=y*SIZE+x;
+        if(board[i]!==EMPTY)drawStone(cxArr[x],cyArr[y],r,board[i]);
+      }
 
-  // last move marker
-  if(lastMove){
-    const[lx,ly]=lastMove;
-    const c=board[ly][lx];
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(cxArr[lx],cyArr[ly],r*.36,0,Math.PI*2);
-    ctx.strokeStyle=c===BLACK?'#dcb35c':'#555';
-    ctx.lineWidth=Math.max(1,cell*.048);
-    ctx.stroke();
-    ctx.restore();
-  }
+    // last move marker
+    if(lastMove){
+      const[lx,ly]=lastMove;
+      const c=board[ly*SIZE+lx];
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cxArr[lx],cyArr[ly],r*.36,0,Math.PI*2);
+      ctx.strokeStyle=c===BLACK?'#dcb35c':'#555';
+      ctx.lineWidth=Math.max(1,cell*.048);
+      ctx.stroke();
+      ctx.restore();
+    }
 
-  // hover ghost
-  if(!gameOver&&!markingMode&&hoverX>=0&&board[hoverY][hoverX]===EMPTY){
-    ctx.save();ctx.globalAlpha=.28;
-    drawStone(cxArr[hoverX],cyArr[hoverY],r,turn);
-    ctx.restore();
-  }
+    // hover ghost
+    if(!gameOver&&!markingMode&&hoverX>=0&&board[hoverY*SIZE+hoverX]===EMPTY){
+      ctx.save();ctx.globalAlpha=.28;
+      drawStone(cxArr[hoverX],cyArr[hoverY],r,turn);
+      ctx.restore();
+    }
+  });
 }
 
 /* ── Stone bitmap cache ── */
 function rebuildStoneCache(){
   const r=cell*.46;
   const rb=r*1.06; // black: slightly larger
-  const margin=rb*1.9;
+  const margin=rb*1.2; // reduced: smaller shadow needs less canvas buffer
   const D=Math.ceil(rb*2+margin*2);
   const half=D/2;
   function bake(radius,isBlack){
     const oc=document.createElement('canvas');
     oc.width=D;oc.height=D;
     const ox=oc.getContext('2d',{alpha:true});
-    ox.shadowColor='rgba(0,0,0,.6)';
-    ox.shadowBlur=radius*.8;
-    ox.shadowOffsetX=radius*.1;ox.shadowOffsetY=radius*.17;
+    ox.shadowColor='rgba(0,0,0,.5)';
+    ox.shadowBlur=radius*.35;
+    ox.shadowOffsetX=radius*.05;ox.shadowOffsetY=radius*.08;
     ox.beginPath();ox.arc(half,half,radius,0,Math.PI*2);
     if(isBlack){
       const g=ox.createRadialGradient(half-radius*.28,half-radius*.32,radius*.04,half,half,radius);
@@ -619,7 +630,7 @@ function drawStone(cx,cy,r,color){
   const rr=color===BLACK?r*1.06:r;
   ctx.save();
   ctx.shadowColor='rgba(0,0,0,.5)';
-  ctx.shadowBlur=rr*.6;ctx.shadowOffsetX=rr*.1;ctx.shadowOffsetY=rr*.15;
+  ctx.shadowBlur=rr*.35;ctx.shadowOffsetX=rr*.05;ctx.shadowOffsetY=rr*.08;
   ctx.beginPath();ctx.arc(cx,cy,rr,0,Math.PI*2);
   if(color===BLACK){
     const g=ctx.createRadialGradient(cx-rr*.28,cy-rr*.32,rr*.04,cx,cy,rr);
@@ -664,11 +675,12 @@ canvas.addEventListener('pointerdown',e=>{
   const{x,y}=canvasXY(e);if(x<0)return;
   requestAnimationFrame(()=>{
     if(markingMode){
-      if(board[y][x]!==EMPTY)return;
-      territoryMarks[y][x]=territoryMarks[y][x]===markColor?EMPTY:markColor;
+      if(board[y*SIZE+x]!==EMPTY)return;
+      const i=y*SIZE+x;
+      territoryMarks[i]=territoryMarks[i]===markColor?EMPTY:markColor;
       draw();updateScoreDisplay();
     } else {
-      if(gameOver||board[y][x]!==EMPTY)return;
+      if(gameOver||board[y*SIZE+x]!==EMPTY)return;
       playMove(x,y);
     }
   });
@@ -676,22 +688,17 @@ canvas.addEventListener('pointerdown',e=>{
 
 /* ── Game logic ── */
 function playMove(x,y){
-  const tb=board.map(r=>new Uint8Array(r));
+  const tb=board.slice(); // плоска копія — один виклик замість map+Uint8Array
   const ph=zhHi,pl=zhLo;
-  tb[y][x]=turn;zToggle(x,y,turn);
+  tb[y*SIZE+x]=turn;zToggle(x,y,turn);
   const removed=removeCaptured(tb,3-turn);
-  if(!groupHasLib(tb,x,y,turn)&&removed.length===0){zhHi=ph;zhLo=pl;return;}
+  if(!hasLiberty(tb,x,y,turn)&&removed.length===0){zhHi=ph;zhLo=pl;return;}
   const newKey=zKey();
   if(koHash&&koHash===newKey){zhHi=ph;zhLo=pl;return;}
   const prevKey=ph+'|'+pl;
   board=tb;lastMove=[x,y];
   captures[turn]+=removed.length;
-  history.push({
-    board:board.map(r=>new Uint8Array(r)),
-    koHash,captures:{[BLACK]:captures[BLACK],[WHITE]:captures[WHITE]},
-    turn,lastMove:[x,y],zhHi,zhLo,
-    notation:LETTERS[x]+(SIZE-y),color:turn
-  });
+  history.push({notation:LETTERS[x]+(SIZE-y),color:turn});
   koHash=removed.length===1?prevKey:null;
   passCount=0;turn=3-turn;
   playClick();
@@ -703,10 +710,11 @@ function groupInfo(bd,x,y,color,vis){
   while(queue.length){
     const idx=queue.pop();if(vis[idx])continue;vis[idx]=1;
     const cx=idx%SIZE,cy=(idx-cx)/SIZE;group.push([cx,cy]);
-    for(const[nx,ny]of[[cx-1,cy],[cx+1,cy],[cx,cy-1],[cx,cy+1]]){
+    for(let d=0;d<4;d++){
+      const nx=cx+DX[d],ny=cy+DY[d];
       if(nx<0||nx>=SIZE||ny<0||ny>=SIZE)continue;
-      if(bd[ny][nx]===EMPTY)alive=true;
-      else if(bd[ny][nx]===color&&!vis[ny*SIZE+nx])queue.push(ny*SIZE+nx);
+      if(bd[ny*SIZE+nx]===EMPTY)alive=true;
+      else if(bd[ny*SIZE+nx]===color&&!vis[ny*SIZE+nx])queue.push(ny*SIZE+nx);
     }
   }
   return{alive,group};
@@ -715,48 +723,65 @@ function removeCaptured(bd,color){
   const removed=[],vis=new Uint8Array(SIZE*SIZE);
   for(let y=0;y<SIZE;y++)for(let x=0;x<SIZE;x++){
     const idx=y*SIZE+x;
-    if(bd[y][x]===color&&!vis[idx]){
+    if(bd[idx]===color&&!vis[idx]){
       const{alive,group}=groupInfo(bd,x,y,color,vis);
-      if(!alive)for(const[gx,gy]of group){bd[gy][gx]=EMPTY;zToggle(gx,gy,color);removed.push([gx,gy]);}
+      if(!alive)for(const[gx,gy]of group){bd[gy*SIZE+gx]=EMPTY;zToggle(gx,gy,color);removed.push([gx,gy]);}
     }
   }
   return removed;
 }
-function groupHasLib(bd,x,y,color){return groupInfo(bd,x,y,color,new Uint8Array(SIZE*SIZE)).alive;}
+// Рання зупинка на першій знайденій свободі — не будує повний масив групи
+function hasLiberty(bd,x,y,color){
+  const vis=new Uint8Array(SIZE*SIZE);
+  const queue=[y*SIZE+x];
+  while(queue.length){
+    const idx=queue.pop();if(vis[idx])continue;vis[idx]=1;
+    const cx=idx%SIZE,cy=(idx-cx)/SIZE;
+    for(let d=0;d<4;d++){
+      const nx=cx+DX[d],ny=cy+DY[d];
+      if(nx<0||nx>=SIZE||ny<0||ny>=SIZE)continue;
+      if(bd[ny*SIZE+nx]===EMPTY)return true; // перша свобода — виходимо
+      if(bd[ny*SIZE+nx]===color&&!vis[ny*SIZE+nx])queue.push(ny*SIZE+nx);
+    }
+  }
+  return false;
+}
 
 /* ── Territory ── */
 function computeAutoTerritory(){
-  const terr=Array.from({length:SIZE},()=>new Uint8Array(SIZE));
+  const terr=new Uint8Array(SIZE*SIZE);
   const vis=new Uint8Array(SIZE*SIZE);
   for(let y=0;y<SIZE;y++)for(let x=0;x<SIZE;x++){
     const idx=y*SIZE+x;
-    if(board[y][x]===EMPTY&&!vis[idx]){
+    if(board[idx]===EMPTY&&!vis[idx]){
       const area=[],owners=new Set(),q=[idx];
       while(q.length){
         const i=q.pop();if(vis[i])continue;vis[i]=1;
-        const cx=i%SIZE,cy=(i-cx)/SIZE;area.push([cx,cy]);
-        for(const[nx,ny]of[[cx-1,cy],[cx+1,cy],[cx,cy-1],[cx,cy+1]]){
+        const cx=i%SIZE,cy=(i-cx)/SIZE;area.push(i);
+        for(let d=0;d<4;d++){
+          const nx=cx+DX[d],ny=cy+DY[d];
           if(nx<0||nx>=SIZE||ny<0||ny>=SIZE)continue;
-          if(board[ny][nx]===EMPTY){if(!vis[ny*SIZE+nx])q.push(ny*SIZE+nx);}
-          else owners.add(board[ny][nx]);
+          const ni=ny*SIZE+nx;
+          if(board[ni]===EMPTY){if(!vis[ni])q.push(ni);}
+          else owners.add(board[ni]);
         }
       }
       const owner=owners.size===1?[...owners][0]:0;
-      for(const[ax,ay]of area)terr[ay][ax]=owner;
+      for(const i of area)terr[i]=owner;
     }
   }
   return terr;
 }
 function buildFinalMap(auto){
-  const m=Array.from({length:SIZE},()=>new Uint8Array(SIZE));
-  for(let y=0;y<SIZE;y++)for(let x=0;x<SIZE;x++)
-    if(board[y][x]===EMPTY)m[y][x]=auto[y][x]||territoryMarks[y][x]||0;
+  const m=new Uint8Array(SIZE*SIZE);
+  for(let i=0;i<SIZE*SIZE;i++)
+    if(board[i]===EMPTY)m[i]=auto[i]||territoryMarks[i]||0;
   return m;
 }
 function calcScore(fm){
   let tb=0,tw=0;
-  for(let y=0;y<SIZE;y++)for(let x=0;x<SIZE;x++)
-    if(board[y][x]===EMPTY){if(fm[y][x]===BLACK)tb++;else if(fm[y][x]===WHITE)tw++;}
+  for(let i=0;i<SIZE*SIZE;i++)
+    if(board[i]===EMPTY){if(fm[i]===BLACK)tb++;else if(fm[i]===WHITE)tw++;}
   return{terrB:tb,terrW:tw,capB:captures[BLACK],capW:captures[WHITE],
     totalB:tb+captures[BLACK],totalW:tw+captures[WHITE]+KOMI};
 }
@@ -788,13 +813,12 @@ function showFinalScore(){
   scTotalB.textContent=sc.totalB.toFixed(1);scTotalW.textContent=sc.totalW.toFixed(1);
   const diff=Math.abs(sc.totalB-sc.totalW).toFixed(1);
   scWinner.style.display='';
-  const inner=document.getElementById('sc-winner-inner');
   if(sc.totalB>sc.totalW){
-    inner.textContent=`чорні +${diff}`;inner.className='sc-winner-inner w-black';
+    scWinnerInner.textContent=`чорні +${diff}`;scWinnerInner.className='sc-winner-inner w-black';
   } else if(sc.totalW>sc.totalB){
-    inner.textContent=`білі +${diff}`;inner.className='sc-winner-inner w-white';
+    scWinnerInner.textContent=`білі +${diff}`;scWinnerInner.className='sc-winner-inner w-white';
   } else {
-    inner.textContent='нічия';inner.className='sc-winner-inner w-draw';
+    scWinnerInner.textContent='нічия';scWinnerInner.className='sc-winner-inner w-draw';
   }
   gameOver=true;draw();
 }
@@ -830,15 +854,11 @@ function renderHistory(){
 /* ── Buttons ── */
 passBtnEl.onclick=()=>{
   if(gameOver)return;
-  history.push({
-    board:board.map(r=>new Uint8Array(r)),
-    koHash,captures:{[BLACK]:captures[BLACK],[WHITE]:captures[WHITE]},
-    turn,lastMove,zhHi,zhLo,pass:true,color:turn
-  });
+  history.push({pass:true,color:turn});
   passCount++;lastMove=null;koHash=null;
   if(passCount>=2){
     markingMode=true;markColor=BLACK;
-    territoryMarks=Array.from({length:SIZE},()=>new Uint8Array(SIZE));
+    territoryMarks=new Uint8Array(SIZE*SIZE);
     cachedAutoTerritory=computeAutoTerritory(); // board frozen — compute once
     passBtnEl.style.display='none';
     markToggleBtn.style.display='';
@@ -996,7 +1016,8 @@ document.addEventListener('visibilitychange',()=>{
   }
 
   sizeBits();
-  window.addEventListener('resize',sizeBits);
+  let _sbt=null;
+  window.addEventListener('resize',()=>{clearTimeout(_sbt);_sbt=setTimeout(sizeBits,80);});
   requestAnimationFrame(tick);
 })();
 
