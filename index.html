@@ -131,16 +131,20 @@ body{
 /* ── Mark bar ── */
 #mark-bar{
   display:none;
-  padding:5px 12px;border-bottom:1px solid #333331;
-  font-size:11px;color:#777;align-items:center;gap:8px;flex-shrink:0;
+  padding:5px 10px 6px;border-bottom:1px solid #333331;
+  flex-direction:column;gap:5px;flex-shrink:0;
 }
 #mark-bar.visible{display:flex}
-.mark-active-stone{
-  display:inline-block;width:8px;height:8px;border-radius:50%;
-  background:#3a3a3a;box-shadow:0 0 0 1px #888;
-  vertical-align:middle;margin:0 2px;
+#mark-mode-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+#mark-hint-text{font-size:10px;color:#666;flex:1}
+#mark-mode-btns{display:flex;gap:4px}
+.mmb{
+  min-width:28px;height:22px;padding:0 6px;
+  background:#242422;border:1px solid #3a3a38;border-radius:3px;
+  font-size:11px;color:#777;cursor:pointer;white-space:nowrap;
+  -webkit-tap-highlight-color:transparent;
 }
-.mark-active-stone.w{background:#e8e8e4;box-shadow:0 0 0 1px #999}
+.mmb.active{background:#3a2c0a;border-color:#dcb35c;color:#dcb35c}
 
 /* ── Score block ── */
 #score-section{
@@ -306,16 +310,20 @@ body{
     <!-- Controls — після рахунку, перед history -->
     <div id="ctrl-bar">
       <button class="ctrl-btn" id="pass-btn">Пас</button>
-      <button class="ctrl-btn" id="mark-toggle-btn" style="display:none">◐ Чорні</button>
       <button class="ctrl-btn accent" id="finalize-btn" style="display:none">✓ Підрахувати</button>
+      <button class="ctrl-btn" id="back-btn" style="display:none">↩ Редагувати</button>
     </div>
 
     <!-- Mark bar — разом з кнопками фази -->
     <div id="mark-bar">
-      Маркер:
-      <span id="mark-stone-icon" class="mark-active-stone"></span>
-      <span id="mark-color-text">Чорні</span>
-      — клік на порожню клітину
+      <div id="mark-mode-row">
+        <span id="mark-hint-text">Камінь → мертва · Порожнє → позначити</span>
+        <div id="mark-mode-btns">
+          <button class="mmb active" id="mmb-black">⬛ Ч</button>
+          <button class="mmb" id="mmb-white">⬜ Б</button>
+          <button class="mmb" id="mmb-neutral">⊘</button>
+        </div>
+      </div>
     </div>
 
     <!-- Binary clock — між кнопками і history -->
@@ -335,7 +343,7 @@ body{
 <script>
 'use strict';
 
-const EMPTY=0,BLACK=1,WHITE=2;
+const EMPTY=0,BLACK=1,WHITE=2,NEUTRAL=3;
 const LETTERS='ABCDEFGHJKLMNOPQRST'.split('');
 const STAR={
   9:[[2,2],[2,6],[4,4],[6,2],[6,6]],
@@ -346,8 +354,11 @@ const DX=[-1,1,0,0],DY=[0,0,-1,1]; // BFS neighbor directions
 
 let SIZE=9,KOMI=6.5;
 let board,turn,koHash,captures,history,passCount,gameOver,lastMove;
-let markingMode=false,markColor=BLACK,territoryMarks,territoryMap;
-let cachedAutoTerritory=null; // computed once on marking entry, cleared after finalize
+let markingMode=false,territoryMap;
+let deadStones=null;       // Uint8Array: 1 = група позначена як мертва
+let manualMarks=null;      // Uint8Array: BLACK/WHITE/NEUTRAL = ручне маркування, 0 = авто
+let markTerritoryMode=BLACK; // поточний режим ручного маркування
+let cachedAutoTerritory=null; // перераховується при зміні deadStones
 let pad=0,cell=0,cxArr=[],cyArr=[];
 let hoverX=-1,hoverY=-1,zenMode=false;
 let _cachedRect=null;
@@ -364,11 +375,12 @@ const boardSide=document.getElementById('board-side');
 const infoPanel=document.getElementById('info-panel');
 const zenBtn=document.getElementById('zen-btn');
 const passBtnEl=document.getElementById('pass-btn');
-const markToggleBtn=document.getElementById('mark-toggle-btn');
 const finalizeBtn=document.getElementById('finalize-btn');
+const backBtn=document.getElementById('back-btn');
 const markBar=document.getElementById('mark-bar');
-const markStoneIcon=document.getElementById('mark-stone-icon');
-const markColorText=document.getElementById('mark-color-text');
+const mmbBlack=document.getElementById('mmb-black');
+const mmbWhite=document.getElementById('mmb-white');
+const mmbNeutral=document.getElementById('mmb-neutral');
 const histList=document.getElementById('history-list');
 const histWrap=document.getElementById('history-wrap');
 const komiInput=document.getElementById('komi-input');
@@ -428,8 +440,8 @@ function init(){
   turn=BLACK;koHash=null;
   captures={[BLACK]:0,[WHITE]:0};
   history=[];passCount=0;gameOver=false;lastMove=null;
-  markingMode=false;markColor=BLACK;
-  territoryMarks=new Uint8Array(SIZE*SIZE);
+  markingMode=false;
+  deadStones=null;manualMarks=null;markTerritoryMode=BLACK;
   territoryMap=null;hoverX=-1;hoverY=-1;
   cachedAutoTerritory=null;
   initZobrist();
@@ -441,8 +453,8 @@ function init(){
 
 function resetPhaseUI(){
   passBtnEl.style.display='';
-  markToggleBtn.style.display='none';
   finalizeBtn.style.display='none';
+  backBtn.style.display='none';
   markBar.classList.remove('visible');
   scWinner.style.display='none';
 }
@@ -527,25 +539,46 @@ function draw(){
 
     const r=cell*.46;
 
-    // territory marks (marking phase)
-    if(markingMode){
+    // territory preview під час маркування
+    if(markingMode&&cachedAutoTerritory){
       for(let y=0;y<SIZE;y++)
         for(let x=0;x<SIZE;x++){
           const i=y*SIZE+x;
-          if(board[i]===EMPTY&&territoryMarks[i]){
-            ctx.globalAlpha=.45;
-            drawStone(cxArr[x],cyArr[y],r*.72,territoryMarks[i]);
+          const isVirtEmpty=board[i]===EMPTY||(deadStones&&deadStones[i]);
+          if(!isVirtEmpty)continue;
+          const mm=manualMarks?manualMarks[i]:0;
+          if(mm===NEUTRAL){
+            // спірна: сірий ×
+            const cx=cxArr[x],cy=cyArr[y],s=r*.28;
+            ctx.strokeStyle='#666';ctx.lineWidth=Math.max(1.5,cell*.04);
+            ctx.beginPath();ctx.moveTo(cx-s,cy-s);ctx.lineTo(cx+s,cy+s);
+            ctx.moveTo(cx+s,cy-s);ctx.lineTo(cx-s,cy+s);ctx.stroke();
+          } else if(mm===BLACK||mm===WHITE){
+            // ручна позначка: суцільна кулька
+            ctx.beginPath();ctx.arc(cxArr[x],cyArr[y],r*.36,0,Math.PI*2);
+            ctx.fillStyle=mm===BLACK?'#1a1a1a':'#f0f0ec';ctx.fill();
+          } else if(cachedAutoTerritory[i]){
+            // авто-територія: напівпрозора
+            ctx.globalAlpha=.2;
+            drawStone(cxArr[x],cyArr[y],r*.65,cachedAutoTerritory[i]);
             ctx.globalAlpha=1;
           }
         }
     }
 
-    // final territory dots
+    // фінальні позначки після підрахунку (B/W крапки + спірні ×)
     if(gameOver&&territoryMap){
       for(let y=0;y<SIZE;y++)
         for(let x=0;x<SIZE;x++){
           const i=y*SIZE+x;
-          if(board[i]===EMPTY&&territoryMap[i]){
+          const isVirtEmpty=board[i]===EMPTY||(deadStones&&deadStones[i]);
+          if(!isVirtEmpty)continue;
+          if(manualMarks&&manualMarks[i]===NEUTRAL){
+            const cx=cxArr[x],cy=cyArr[y],s=r*.28;
+            ctx.strokeStyle='#555';ctx.lineWidth=Math.max(1.5,cell*.04);
+            ctx.beginPath();ctx.moveTo(cx-s,cy-s);ctx.lineTo(cx+s,cy+s);
+            ctx.moveTo(cx+s,cy-s);ctx.lineTo(cx-s,cy+s);ctx.stroke();
+          } else if(territoryMap[i]){
             ctx.beginPath();
             ctx.arc(cxArr[x],cyArr[y],r*.34,0,Math.PI*2);
             ctx.fillStyle=territoryMap[i]===BLACK?'#1a1a1a':'#f0f0ec';
@@ -554,11 +587,18 @@ function draw(){
         }
     }
 
-    // stones
+    // stones (мертві — напівпрозорі)
     for(let y=0;y<SIZE;y++)
       for(let x=0;x<SIZE;x++){
         const i=y*SIZE+x;
-        if(board[i]!==EMPTY)drawStone(cxArr[x],cyArr[y],r,board[i]);
+        if(board[i]===EMPTY)continue;
+        if(deadStones&&deadStones[i]){
+          ctx.globalAlpha=.3;
+          drawStone(cxArr[x],cyArr[y],r,board[i]);
+          ctx.globalAlpha=1;
+        } else {
+          drawStone(cxArr[x],cyArr[y],r,board[i]);
+        }
       }
 
     // last move marker
@@ -675,9 +715,18 @@ canvas.addEventListener('pointerdown',e=>{
   const{x,y}=canvasXY(e);if(x<0)return;
   requestAnimationFrame(()=>{
     if(markingMode){
-      if(board[y*SIZE+x]!==EMPTY)return;
-      const i=y*SIZE+x;
-      territoryMarks[i]=territoryMarks[i]===markColor?EMPTY:markColor;
+      if(board[y*SIZE+x]!==EMPTY){
+        // камінь → перемикаємо всю групу як мертву/живу
+        const vis=new Uint8Array(SIZE*SIZE);
+        const{group}=groupInfo(board,x,y,board[y*SIZE+x],vis);
+        const wasDead=deadStones[y*SIZE+x]===1;
+        for(const[gx,gy]of group)deadStones[gy*SIZE+gx]=wasDead?0:1;
+        cachedAutoTerritory=computeAutoTerritory();
+      } else {
+        // порожня клітина → ручне маркування (BLACK / WHITE / NEUTRAL)
+        const i=y*SIZE+x;
+        manualMarks[i]=manualMarks[i]===markTerritoryMode?0:markTerritoryMode;
+      }
       draw();updateScoreDisplay();
     } else {
       if(gameOver||board[y*SIZE+x]!==EMPTY)return;
@@ -748,12 +797,23 @@ function hasLiberty(bd,x,y,color){
 }
 
 /* ── Territory ── */
+
+// Дошка без мертвих каменів — основа для підрахунку
+function buildVirtualBoard(){
+  if(!deadStones)return board;
+  const vb=board.slice();
+  for(let i=0;i<SIZE*SIZE;i++)if(deadStones[i])vb[i]=EMPTY;
+  return vb;
+}
+
+// Автоматичне визначення territory — працює на virtualBoard
 function computeAutoTerritory(){
+  const bd=buildVirtualBoard();
   const terr=new Uint8Array(SIZE*SIZE);
   const vis=new Uint8Array(SIZE*SIZE);
   for(let y=0;y<SIZE;y++)for(let x=0;x<SIZE;x++){
     const idx=y*SIZE+x;
-    if(board[idx]===EMPTY&&!vis[idx]){
+    if(bd[idx]===EMPTY&&!vis[idx]){
       const area=[],owners=new Set(),q=[idx];
       while(q.length){
         const i=q.pop();if(vis[i])continue;vis[i]=1;
@@ -762,8 +822,8 @@ function computeAutoTerritory(){
           const nx=cx+DX[d],ny=cy+DY[d];
           if(nx<0||nx>=SIZE||ny<0||ny>=SIZE)continue;
           const ni=ny*SIZE+nx;
-          if(board[ni]===EMPTY){if(!vis[ni])q.push(ni);}
-          else owners.add(board[ni]);
+          if(bd[ni]===EMPTY){if(!vis[ni])q.push(ni);}
+          else owners.add(bd[ni]);
         }
       }
       const owner=owners.size===1?owners.values().next().value:0;
@@ -772,39 +832,58 @@ function computeAutoTerritory(){
   }
   return terr;
 }
+
+// Фінальна карта territory: ручні позначки мають пріоритет над авто
 function buildFinalMap(auto){
   const m=new Uint8Array(SIZE*SIZE);
-  for(let i=0;i<SIZE*SIZE;i++)
-    if(board[i]===EMPTY)m[i]=auto[i]||territoryMarks[i]||0;
+  for(let i=0;i<SIZE*SIZE;i++){
+    const isVirtualEmpty=board[i]===EMPTY||(deadStones&&deadStones[i]);
+    if(!isVirtualEmpty)continue;
+    if(manualMarks&&manualMarks[i]){
+      // NEUTRAL(3) → 0: спірна не рахується нікому
+      m[i]=manualMarks[i]===NEUTRAL?0:manualMarks[i];
+    } else {
+      m[i]=auto[i]||0;
+    }
+  }
   return m;
 }
+
+// Підрахунок: мертві камені = захоплені суперником
 function calcScore(fm){
-  let tb=0,tw=0;
-  for(let i=0;i<SIZE*SIZE;i++)
-    if(board[i]===EMPTY){if(fm[i]===BLACK)tb++;else if(fm[i]===WHITE)tw++;}
-  return{terrB:tb,terrW:tw,capB:captures[BLACK],capW:captures[WHITE],
-    totalB:tb+captures[BLACK],totalW:tw+captures[WHITE]+KOMI};
+  let tb=0,tw=0,deadB=0,deadW=0;
+  for(let i=0;i<SIZE*SIZE;i++){
+    if(deadStones&&deadStones[i]){
+      if(board[i]===BLACK)deadB++;else if(board[i]===WHITE)deadW++;
+    }
+    if(fm[i]===BLACK)tb++;else if(fm[i]===WHITE)tw++;
+  }
+  const capB=captures[BLACK]+deadW;
+  const capW=captures[WHITE]+deadB;
+  return{terrB:tb,terrW:tw,capB,capW,
+    totalB:tb+capB,totalW:tw+capW+KOMI};
 }
 
 /* ── Score display ── */
 function updateScoreDisplay(){
-  scCapB.textContent=captures[BLACK];
-  scCapW.textContent=captures[WHITE];
   scKomiVal.textContent=KOMI;
   if(markingMode||gameOver){
     const auto=cachedAutoTerritory||computeAutoTerritory();
     const fm=buildFinalMap(auto);
     const sc=calcScore(fm);
     scTerrB.textContent=sc.terrB;scTerrW.textContent=sc.terrW;
+    scCapB.textContent=sc.capB;scCapW.textContent=sc.capW;
     scTotalB.textContent=sc.totalB.toFixed(1);scTotalW.textContent=sc.totalW.toFixed(1);
   } else {
+    scCapB.textContent=captures[BLACK];
+    scCapW.textContent=captures[WHITE];
     scTerrB.textContent='—';scTerrW.textContent='—';
     scTotalB.textContent='—';scTotalW.textContent='—';
   }
 }
 function showFinalScore(){
   const auto=cachedAutoTerritory||computeAutoTerritory();
-  cachedAutoTerritory=null; // no longer needed
+  cachedAutoTerritory=auto; // зберігаємо — потрібно при поверненні назад
   territoryMap=buildFinalMap(auto);
   const sc=calcScore(territoryMap);
   scTerrB.textContent=sc.terrB;scTerrW.textContent=sc.terrW;
@@ -820,7 +899,9 @@ function showFinalScore(){
   } else {
     scWinnerInner.textContent='нічия';scWinnerInner.className='sc-winner-inner w-draw';
   }
-  gameOver=true;draw();
+  gameOver=true;
+  backBtn.style.display=''; // дозволяємо повернутись до маркування
+  draw();
 }
 
 /* ── History — incremental append, no full rebuild ── */
@@ -857,35 +938,51 @@ passBtnEl.onclick=()=>{
   history.push({pass:true,color:turn});
   passCount++;lastMove=null;koHash=null;
   if(passCount>=2){
-    markingMode=true;markColor=BLACK;
-    territoryMarks=new Uint8Array(SIZE*SIZE);
-    cachedAutoTerritory=computeAutoTerritory(); // board frozen — compute once
+    markingMode=true;
+    deadStones=new Uint8Array(SIZE*SIZE);
+    manualMarks=new Uint8Array(SIZE*SIZE);
+    cachedAutoTerritory=computeAutoTerritory();
     passBtnEl.style.display='none';
-    markToggleBtn.style.display='';
     finalizeBtn.style.display='';
     markBar.classList.add('visible');
-    updateMarkBar();updateScoreDisplay();draw();
+    setMarkMode(BLACK);
+    updateScoreDisplay();draw();
     return;
   }
   turn=3-turn;updateScoreDisplay();renderHistory();draw();
 };
 
-markToggleBtn.onclick=()=>{
-  markColor=markColor===BLACK?WHITE:BLACK;
-  updateMarkBar();
-};
-function updateMarkBar(){
-  markStoneIcon.className='mark-active-stone'+(markColor===WHITE?' w':'');
-  markColorText.textContent=markColor===BLACK?'Чорні':'Білі';
-  markToggleBtn.textContent='◐ '+(markColor===BLACK?'Чорні':'Білі');
+
+// Перемикач режиму ручного маркування territory
+function setMarkMode(mode){
+  markTerritoryMode=mode;
+  mmbBlack.classList.toggle('active',mode===BLACK);
+  mmbWhite.classList.toggle('active',mode===WHITE);
+  mmbNeutral.classList.toggle('active',mode===NEUTRAL);
 }
+mmbBlack.onclick=()=>setMarkMode(BLACK);
+mmbWhite.onclick=()=>setMarkMode(WHITE);
+mmbNeutral.onclick=()=>setMarkMode(NEUTRAL);
 
 finalizeBtn.onclick=()=>{
   markingMode=false;
-  markToggleBtn.style.display='none';
   finalizeBtn.style.display='none';
   markBar.classList.remove('visible');
   showFinalScore();
+};
+
+// Повернення з фазу підрахунку назад у маркування мертвих каменів
+backBtn.onclick=()=>{
+  if(!gameOver)return;
+  gameOver=false;markingMode=true;
+  territoryMap=null;
+  cachedAutoTerritory=computeAutoTerritory();
+  finalizeBtn.style.display='';
+  backBtn.style.display='none';
+  markBar.classList.add('visible');
+  scWinner.style.display='none';
+  setMarkMode(markTerritoryMode); // відновлюємо підсвітку кнопок
+  updateScoreDisplay();draw();
 };
 
 /* ── Size & Komi ── */
@@ -1031,6 +1128,9 @@ window.addEventListener('resize',onResize);
 window.addEventListener('orientationchange',()=>{clearTimeout(_ot);_ot=setTimeout(()=>{applyOrientation();resizeCanvas();},140);});
 
 /* ── PWA ── */
+// SW через blob: не підтримується у Firefox/Safari (порушує same-origin).
+// iOS: встановлення через apple-mobile-web-app-capable meta-теги (без SW).
+// Chrome/Edge: встановлення через manifest blob — працює.
 (async()=>{
   try{
     const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="#1f1f1e"/><circle cx="32" cy="32" r="14" fill="#dcb35c"/><circle cx="32" cy="32" r="8" fill="#1f1f1e"/></svg>`;
@@ -1040,10 +1140,6 @@ window.addEventListener('orientationchange',()=>{clearTimeout(_ot);_ot=setTimeou
     for(const s of[192,512]){try{icons.push({src:await toPng(svgURL,s),sizes:`${s}x${s}`,type:'image/png'});}catch(e){}}
     try{document.getElementById('apple-touch').href=await toPng(svgURL,180);}catch(e){}
     document.getElementById('manifest-link').href=URL.createObjectURL(new Blob([JSON.stringify({name:'Ґо',short_name:'Ґо',start_url:location.pathname,display:'standalone',background_color:'#1f1f1e',theme_color:'#1f1f1e',icons})],{type:'application/json'}));
-    if('serviceWorker' in navigator){
-      const sw=`const C='go-v2';self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(C).then(c=>{try{return c.add(new Request(location.pathname,{cache:'no-cache'}));}catch(e){}}));});self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.map(k=>k!==C&&caches.delete(k)))));self.clients.claim();});self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;e.respondWith(caches.open(C).then(async c=>{const r=await c.match(e.request);if(r)return r;const nr=await fetch(e.request);if(nr&&nr.ok)c.put(e.request,nr.clone()).catch(()=>{});return nr;}).catch(()=>caches.match('/')));});`;
-      await navigator.serviceWorker.register(URL.createObjectURL(new Blob([sw],{type:'application/javascript'})),{scope:'./'});
-    }
   }catch(e){}
 })();
 
