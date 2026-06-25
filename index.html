@@ -146,6 +146,46 @@ body{
 }
 .mmb.active{background:#3a2c0a;border-color:#dcb35c;color:#dcb35c}
 
+/* ── Time control ── */
+#time-bar{
+  display:flex;align-items:center;gap:3px;
+  padding:4px 10px;border-bottom:1px solid #333331;
+  flex-shrink:0;overflow-x:auto;scrollbar-width:none;
+}
+#time-bar::-webkit-scrollbar{display:none}
+.tcb{
+  background:transparent;color:#555;
+  border:1px solid transparent;border-radius:3px;
+  padding:3px 6px;font-size:10.5px;
+  cursor:pointer;outline:none;font-family:inherit;
+  white-space:nowrap;flex-shrink:0;
+  -webkit-tap-highlight-color:transparent;
+}
+.tcb.active{color:#dcb35c;border-color:#dcb35c}
+.tc-sep{width:1px;background:#2a2a28;height:14px;flex-shrink:0;margin:0 3px}
+
+/* ── Clock display ── */
+#clock-bar{
+  display:none;
+  padding:6px 14px;border-bottom:1px solid #333331;
+  justify-content:space-between;align-items:center;
+  flex-shrink:0;
+}
+#clock-bar.visible{display:flex}
+.ck-player{display:flex;align-items:center;gap:6px}
+.ck-stone{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.ck-stone-b{background:radial-gradient(circle at 35% 35%,#666,#111)}
+.ck-stone-w{background:radial-gradient(circle at 35% 35%,#fff,#bbb);box-shadow:0 0 0 .5px #888}
+.ck-main{
+  font-size:19px;font-variant-numeric:tabular-nums;
+  color:#3a3a38;font-weight:300;
+  transition:color .25s;
+}
+.ck-byo{font-size:11px;color:#555;font-variant-numeric:tabular-nums}
+.ck-player.ck-on .ck-main{color:#dcb35c;font-weight:500}
+.ck-player.ck-on .ck-byo{color:#dcb35c}
+.ck-player.ck-low .ck-main{color:#c94444;font-weight:600}
+
 /* ── Score block ── */
 #score-section{
   padding:7px 14px 6px;border-bottom:1px solid #333331;
@@ -165,19 +205,15 @@ body{
 .sc-total .sc-b,.sc-total .sc-w{color:#f0f0ec;font-weight:600}
 .sc-winner{
   grid-column:1/-1;
-  display:flex;justify-content:center;
-  padding:4px 0 2px;
+  display:flex;border-top:1px solid #2a2a28;
+  margin-top:3px;
 }
-.sc-winner-inner{
-  display:inline-block;
-  font-size:12px;font-weight:600;letter-spacing:.02em;
-  border:1px solid #d4a84b;border-radius:3px;
-  background:#c49a3a;
-  padding:2px 10px;
+.sc-res-cell{
+  flex:1;text-align:center;padding:5px 0 3px;
+  font-size:16px;font-variant-numeric:tabular-nums;
+  color:#3a3a38;
 }
-.sc-winner-inner.w-black{color:#1a1008}
-.sc-winner-inner.w-white{color:#f0f0ec}
-.sc-winner-inner.w-draw{color:rgba(60,36,4,.65)}
+.sc-res-cell.sc-res-win{color:#dcb35c;font-weight:600}
 
 /* ── History ── */
 #history-wrap{
@@ -275,6 +311,33 @@ body{
       </div>
     </div>
 
+    <!-- Time control presets: ∞ | Fischer | Byoyomi -->
+    <div id="time-bar">
+      <button class="tcb active" data-tc="none">∞</button>
+      <div class="tc-sep"></div>
+      <button class="tcb" data-tc="f1">2+7</button>
+      <button class="tcb" data-tc="f2">5+10</button>
+      <button class="tcb" data-tc="f3">10+30</button>
+      <div class="tc-sep"></div>
+      <button class="tcb" data-tc="b1">5×30</button>
+      <button class="tcb" data-tc="b2">10×30</button>
+      <button class="tcb" data-tc="b3">20×60</button>
+    </div>
+
+    <!-- Running clocks (visible only when timer active) -->
+    <div id="clock-bar">
+      <div class="ck-player" id="ck-b">
+        <div class="ck-stone ck-stone-b"></div>
+        <span class="ck-main" id="ck-main-b">—</span>
+        <span class="ck-byo" id="ck-byo-b"></span>
+      </div>
+      <div class="ck-player" id="ck-w" style="flex-direction:row-reverse">
+        <div class="ck-stone ck-stone-w"></div>
+        <span class="ck-main" id="ck-main-w">—</span>
+        <span class="ck-byo" id="ck-byo-w"></span>
+      </div>
+    </div>
+
     <!-- Score — завжди на місці -->
     <div id="score-section">
       <div id="score-block">
@@ -303,7 +366,10 @@ body{
           <div class="sc-b" id="sc-total-b">—</div>
           <div class="sc-w" id="sc-total-w">—</div>
         </div>
-        <div id="sc-winner" class="sc-winner" style="display:none"><span id="sc-winner-inner" class="sc-winner-inner"></span></div>
+        <div id="sc-winner" class="sc-winner" style="display:none">
+          <div class="sc-res-cell" id="sc-res-b-cell"><span id="sc-res-b">—</span></div>
+          <div class="sc-res-cell" id="sc-res-w-cell"><span id="sc-res-w">—</span></div>
+        </div>
       </div>
     </div>
 
@@ -392,7 +458,17 @@ const scKomiVal=document.getElementById('sc-komi-val');
 const scTotalB=document.getElementById('sc-total-b');
 const scTotalW=document.getElementById('sc-total-w');
 const scWinner=document.getElementById('sc-winner');
-const scWinnerInner=document.getElementById('sc-winner-inner');
+const scResB=document.getElementById('sc-res-b');
+const scResW=document.getElementById('sc-res-w');
+const scResBCell=document.getElementById('sc-res-b-cell');
+const scResWCell=document.getElementById('sc-res-w-cell');
+const clockBar=document.getElementById('clock-bar');
+const ckB=document.getElementById('ck-b');
+const ckW=document.getElementById('ck-w');
+const ckMainB=document.getElementById('ck-main-b');
+const ckMainW=document.getElementById('ck-main-w');
+const ckByoB=document.getElementById('ck-byo-b');
+const ckByoW=document.getElementById('ck-byo-w');
 
 /* ── Audio ── */
 let audioCtx=null;
@@ -434,6 +510,94 @@ function applyOrientation(){
   }
 }
 
+/* ── Timer presets ── */
+const TC={
+  none:{type:'none'},
+  f1:{type:'f',main:120,inc:7},     // 2' + 7" Fischer
+  f2:{type:'f',main:300,inc:10},    // 5' + 10"
+  f3:{type:'f',main:600,inc:30},    // 10' + 30"
+  b1:{type:'b',main:300,periods:5,period:30},  // 5' + 5×30" Byoyomi
+  b2:{type:'b',main:600,periods:5,period:30},  // 10' + 5×30"
+  b3:{type:'b',main:1200,periods:5,period:60}, // 20' + 5×60"
+};
+let tcKey='none',timerInt=null,timerStarted=false;
+let clockB={},clockW={};
+
+function makeClk(pre){
+  return pre.type==='none'?{}:
+    {main:pre.main,inByo:false,periods:pre.periods||0,byoT:pre.period||0};
+}
+function fmtSec(s){
+  return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+}
+function updateClockUI(){
+  const pre=TC[tcKey];if(pre.type==='none')return;
+  const isByoyomi=pre.type==='b';
+  // Black
+  ckMainB.textContent=clockB.inByo?`0:${String(clockB.byoT).padStart(2,'0')}`:fmtSec(clockB.main);
+  ckByoB.textContent=isByoyomi?`×${clockB.periods}`:'';
+  // White
+  ckMainW.textContent=clockW.inByo?`0:${String(clockW.byoT).padStart(2,'0')}`:fmtSec(clockW.main);
+  ckByoW.textContent=isByoyomi?`×${clockW.periods}`:'';
+  // Active / low
+  const bOn=timerStarted&&!gameOver&&!markingMode&&turn===BLACK;
+  const wOn=timerStarted&&!gameOver&&!markingMode&&turn===WHITE;
+  const bLow=bOn&&(clockB.inByo?clockB.byoT<=10:clockB.main<=30);
+  const wLow=wOn&&(clockW.inByo?clockW.byoT<=10:clockW.main<=30);
+  ckB.classList.toggle('ck-on',bOn&&!bLow);
+  ckW.classList.toggle('ck-on',wOn&&!wLow);
+  ckB.classList.toggle('ck-low',bLow);
+  ckW.classList.toggle('ck-low',wLow);
+}
+function timerTick(){
+  if(gameOver||markingMode){clearInterval(timerInt);timerInt=null;return;}
+  const p=turn===BLACK?clockB:clockW;
+  const pre=TC[tcKey];
+  if(pre.type==='f'){
+    if(--p.main<=0){p.main=0;updateClockUI();onTimeExpired();return;}
+  } else {
+    if(!p.inByo){
+      if(--p.main<=0){p.main=0;p.inByo=true;p.byoT=pre.period;}
+    } else {
+      if(--p.byoT<=0){
+        if(--p.periods<=0){p.byoT=0;updateClockUI();onTimeExpired();return;}
+        p.byoT=pre.period;
+      }
+    }
+  }
+  updateClockUI();
+}
+function onMoveMade(movedBy){
+  // викликається ДО перемикання turn — movedBy = гравець, що зробив хід
+  const pre=TC[tcKey];if(pre.type==='none')return;
+  const p=movedBy===BLACK?clockB:clockW;
+  if(pre.type==='f'){p.main+=pre.inc;}          // Фішер: +інкремент
+  else if(p.inByo){p.byoT=pre.period;}          // Бьо-йомі: скинути таймер періоду
+  if(!timerStarted){
+    timerStarted=true;
+    timerInt=setInterval(timerTick,1000);
+  }
+}
+function onTimeExpired(){
+  clearInterval(timerInt);timerInt=null;
+  gameOver=true;passBtnEl.disabled=true;
+  const won=turn===BLACK?WHITE:BLACK;
+  scResB.textContent=won===BLACK?'✓':'×';
+  scResW.textContent=won===WHITE?'✓':'×';
+  scResBCell.classList.toggle('sc-res-win',won===BLACK);
+  scResWCell.classList.toggle('sc-res-win',won===WHITE);
+  scWinner.style.display='';
+  updateClockUI();draw();
+}
+function setupTimer(){
+  clearInterval(timerInt);timerInt=null;timerStarted=false;
+  const pre=TC[tcKey];
+  if(pre.type==='none'){clockBar.classList.remove('visible');return;}
+  clockB=makeClk(pre);clockW=makeClk(pre);
+  clockBar.classList.add('visible');
+  updateClockUI();
+}
+
 /* ── Init ── */
 function init(){
   board=new Uint8Array(SIZE*SIZE);
@@ -446,6 +610,8 @@ function init(){
   cachedAutoTerritory=null;
   initZobrist();
   resetPhaseUI();
+  passBtnEl.disabled=false;
+  setupTimer();
   updateScoreDisplay();
   renderHistory();
   resizeCanvas();
@@ -749,7 +915,7 @@ function playMove(x,y){
   captures[turn]+=removed.length;
   history.push({notation:LETTERS[x]+(SIZE-y),color:turn});
   koHash=removed.length===1?prevKey:null;
-  passCount=0;turn=3-turn;
+  passCount=0;onMoveMade(turn);turn=3-turn;
   playClick();
   updateScoreDisplay();renderHistory();draw();
 }
@@ -891,14 +1057,20 @@ function showFinalScore(){
   scKomiVal.textContent=KOMI;
   scTotalB.textContent=sc.totalB.toFixed(1);scTotalW.textContent=sc.totalW.toFixed(1);
   const diff=Math.abs(sc.totalB-sc.totalW).toFixed(1);
-  scWinner.style.display='';
+  scResBCell.classList.remove('sc-res-win');scResWCell.classList.remove('sc-res-win');
   if(sc.totalB>sc.totalW){
-    scWinnerInner.textContent=`чорні +${diff}`;scWinnerInner.className='sc-winner-inner w-black';
+    scResB.textContent=`${sc.totalB.toFixed(1)} +${diff}`;
+    scResW.textContent=sc.totalW.toFixed(1);
+    scResBCell.classList.add('sc-res-win');
   } else if(sc.totalW>sc.totalB){
-    scWinnerInner.textContent=`білі +${diff}`;scWinnerInner.className='sc-winner-inner w-white';
+    scResB.textContent=sc.totalB.toFixed(1);
+    scResW.textContent=`${sc.totalW.toFixed(1)} +${diff}`;
+    scResWCell.classList.add('sc-res-win');
   } else {
-    scWinnerInner.textContent='нічия';scWinnerInner.className='sc-winner-inner w-draw';
+    scResB.textContent=sc.totalB.toFixed(1);
+    scResW.textContent=sc.totalW.toFixed(1);
   }
+  scWinner.style.display='';
   gameOver=true;
   backBtn.style.display=''; // дозволяємо повернутись до маркування
   draw();
@@ -938,6 +1110,7 @@ passBtnEl.onclick=()=>{
   history.push({pass:true,color:turn});
   passCount++;lastMove=null;koHash=null;
   if(passCount>=2){
+    clearInterval(timerInt);timerInt=null; // таймер зупиняємо під час підрахунку
     markingMode=true;
     deadStones=new Uint8Array(SIZE*SIZE);
     manualMarks=new Uint8Array(SIZE*SIZE);
@@ -949,7 +1122,7 @@ passBtnEl.onclick=()=>{
     updateScoreDisplay();draw();
     return;
   }
-  turn=3-turn;updateScoreDisplay();renderHistory();draw();
+  onMoveMade(turn);turn=3-turn;updateScoreDisplay();renderHistory();draw();
 };
 
 
@@ -981,11 +1154,21 @@ backBtn.onclick=()=>{
   backBtn.style.display='none';
   markBar.classList.add('visible');
   scWinner.style.display='none';
-  setMarkMode(markTerritoryMode); // відновлюємо підсвітку кнопок
+  scResBCell.classList.remove('sc-res-win');scResWCell.classList.remove('sc-res-win');
+  passBtnEl.disabled=false;
+  setMarkMode(markTerritoryMode);
   updateScoreDisplay();draw();
 };
 
-/* ── Size & Komi ── */
+/* ── Time control & Size & Komi ── */
+document.querySelectorAll('.tcb').forEach(btn=>{
+  btn.onclick=()=>{
+    document.querySelectorAll('.tcb').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    tcKey=btn.dataset.tc;
+    init();
+  };
+});
 document.querySelectorAll('.size-btn').forEach(btn=>{
   btn.onclick=()=>{
     document.querySelectorAll('.size-btn').forEach(b=>b.classList.remove('active'));
