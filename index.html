@@ -128,23 +128,28 @@ body{
 #komi-input::-webkit-outer-spin-button{-webkit-appearance:none}
 #komi-input:focus{border-color:#555}
 
-/* ── Mark bar ── */
-#mark-bar{
-  display:none;
-  padding:5px 10px 6px;border-bottom:1px solid #333331;
-  flex-direction:column;gap:5px;flex-shrink:0;
+/* ── Marking controls (всередині score-block → точне вирівнювання) ── */
+.sc-mc-label{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:5px 0 3px;
 }
-#mark-bar.visible{display:flex}
-#mark-mode-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
-#mark-hint-text{font-size:10px;color:#666;flex:1}
-#mark-mode-btns{display:flex;gap:4px}
-.mmb{
-  min-width:28px;height:22px;padding:0 6px;
-  background:#242422;border:1px solid #3a3a38;border-radius:3px;
-  font-size:11px;color:#777;cursor:pointer;white-space:nowrap;
+.sc-mc-cell{
+  display:flex;align-items:center;justify-content:center;
+  padding-bottom:3px;
+}
+.sc-mc-back{
+  grid-column:1/-1;
+  display:flex;justify-content:flex-end;
+  padding:4px 0 2px;
+}
+.sc-mk-btn{
+  background:transparent;color:#666;
+  border:1px solid #3a3a38;border-radius:3px;
+  padding:3px 8px;font-size:12px;
+  cursor:pointer;font-family:inherit;
   -webkit-tap-highlight-color:transparent;
 }
-.mmb.active{background:#3a2c0a;border-color:#dcb35c;color:#dcb35c}
+.sc-mk-btn.active{color:#dcb35c;border-color:#dcb35c}
 
 /* ── Time control ── */
 #time-bar{
@@ -373,6 +378,21 @@ body{
           <div class="sc-b" id="sc-total-b">—</div>
           <div class="sc-w" id="sc-total-w">—</div>
         </div>
+        <!-- Marking controls: в тій самій сітці → Ч/Б точно під колонками чорних/білих -->
+        <div class="sc-row" id="sc-mark-ctrl" style="display:none">
+          <div class="sc-mc-label">
+            <button class="sc-mk-btn" id="mmb-neutral">⊘</button>
+            <button class="ctrl-btn accent" id="finalize-btn">✓ Підрахувати</button>
+          </div>
+          <div class="sc-b sc-mc-cell"><button class="sc-mk-btn active" id="mmb-black">Ч</button></div>
+          <div class="sc-w sc-mc-cell"><button class="sc-mk-btn" id="mmb-white">Б</button></div>
+        </div>
+        <!-- Back button: після фіналізації -->
+        <div class="sc-row" id="sc-back-ctrl" style="display:none">
+          <div class="sc-mc-back">
+            <button class="ctrl-btn accent" id="back-btn">Редагувати</button>
+          </div>
+        </div>
         <div id="sc-winner" class="sc-winner" style="display:none">
           <div class="sc-res-cell" id="sc-res-b-cell"><span id="sc-res-b">—</span></div>
           <div class="sc-res-cell" id="sc-res-w-cell"><span id="sc-res-w">—</span></div>
@@ -383,23 +403,9 @@ body{
     <!-- Controls — після рахунку, перед history -->
     <div id="ctrl-bar">
       <button class="ctrl-btn" id="pass-btn">Пас</button>
-      <button class="ctrl-btn accent" id="finalize-btn" style="display:none">✓ Підрахувати</button>
-      <button class="ctrl-btn" id="back-btn" style="display:none">↩ Редагувати</button>
     </div>
 
-    <!-- Mark bar — разом з кнопками фази -->
-    <div id="mark-bar">
-      <div id="mark-mode-row">
-        <span id="mark-hint-text">Камінь → мертва · Порожнє → позначити</span>
-        <div id="mark-mode-btns">
-          <button class="mmb active" id="mmb-black">⬛ Ч</button>
-          <button class="mmb" id="mmb-white">⬜ Б</button>
-          <button class="mmb" id="mmb-neutral">⊘</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Binary clock — між кнопками і history -->
+    <!-- Binary clock — між score і history -->
     <div id="bin-clock" role="timer" aria-label="Бінарний годинник"></div>
 
     <!-- History -->
@@ -450,7 +456,9 @@ const zenBtn=document.getElementById('zen-btn');
 const passBtnEl=document.getElementById('pass-btn');
 const finalizeBtn=document.getElementById('finalize-btn');
 const backBtn=document.getElementById('back-btn');
-const markBar=document.getElementById('mark-bar');
+const scMarkCtrl=document.getElementById('sc-mark-ctrl');
+const scBackCtrl=document.getElementById('sc-back-ctrl');
+const ctrlBar=document.getElementById('ctrl-bar');
 const mmbBlack=document.getElementById('mmb-black');
 const mmbWhite=document.getElementById('mmb-white');
 const mmbNeutral=document.getElementById('mmb-neutral');
@@ -594,6 +602,7 @@ function onTimeExpired(){
   scResBCell.classList.toggle('sc-res-win',won===BLACK);
   scResWCell.classList.toggle('sc-res-win',won===WHITE);
   scWinner.style.display='';
+  scBackCtrl.style.display='contents';
   updateClockUI();draw();
 }
 function setupTimer(){
@@ -626,9 +635,9 @@ function init(){
 
 function resetPhaseUI(){
   passBtnEl.style.display='';
-  finalizeBtn.style.display='none';
-  backBtn.style.display='none';
-  markBar.classList.remove('visible');
+  ctrlBar.style.display='';
+  scMarkCtrl.style.display='none';
+  scBackCtrl.style.display='none';
   scWinner.style.display='none';
   scTotalB.classList.remove('sc-win');scTotalW.classList.remove('sc-win');
 }
@@ -1068,7 +1077,7 @@ function showFinalScore(){
   if(sc.totalB>sc.totalW)scTotalB.classList.add('sc-win');
   else if(sc.totalW>sc.totalB)scTotalW.classList.add('sc-win');
   gameOver=true;
-  backBtn.style.display='';
+  scBackCtrl.style.display='contents';
   draw();
 }
 
@@ -1106,14 +1115,14 @@ passBtnEl.onclick=()=>{
   history.push({pass:true,color:turn});
   passCount++;lastMove=null;koHash=null;
   if(passCount>=2){
-    clearInterval(timerInt);timerInt=null; // таймер зупиняємо під час підрахунку
+    clearInterval(timerInt);timerInt=null;
     markingMode=true;
     deadStones=new Uint8Array(SIZE*SIZE);
     manualMarks=new Uint8Array(SIZE*SIZE);
     cachedAutoTerritory=computeAutoTerritory();
     passBtnEl.style.display='none';
-    finalizeBtn.style.display='';
-    markBar.classList.add('visible');
+    ctrlBar.style.display='none';
+    scMarkCtrl.style.display='contents';
     setMarkMode(BLACK);
     updateScoreDisplay();draw();
     return;
@@ -1135,8 +1144,7 @@ mmbNeutral.onclick=()=>setMarkMode(NEUTRAL);
 
 finalizeBtn.onclick=()=>{
   markingMode=false;
-  finalizeBtn.style.display='none';
-  markBar.classList.remove('visible');
+  scMarkCtrl.style.display='none';
   showFinalScore();
 };
 
@@ -1146,9 +1154,8 @@ backBtn.onclick=()=>{
   gameOver=false;markingMode=true;
   territoryMap=null;
   cachedAutoTerritory=computeAutoTerritory();
-  finalizeBtn.style.display='';
-  backBtn.style.display='none';
-  markBar.classList.add('visible');
+  scMarkCtrl.style.display='contents';
+  scBackCtrl.style.display='none';
   scWinner.style.display='none';
   scTotalB.classList.remove('sc-win');scTotalW.classList.remove('sc-win');
   scResBCell.classList.remove('sc-res-win');scResWCell.classList.remove('sc-res-win');
