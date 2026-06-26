@@ -201,17 +201,24 @@ body{
 .sc-head-w{color:#6a6a68;font-size:10px;text-align:center;padding:0 0 3px}
 .sc-b{color:#b0b0ac;text-align:center;padding:2px 10px 2px 4px}
 .sc-w{color:#b0b0ac;text-align:center;padding:2px 0}
-.sc-total .sc-label{color:#f0f0ec;font-size:12px}
-.sc-total .sc-b,.sc-total .sc-w{color:#f0f0ec;font-weight:600}
+/* Сепаратор + виграшна підсвітка рядка "Разом" */
+.sc-total .sc-label,.sc-total .sc-b,.sc-total .sc-w{
+  border-top:1px solid #505050;
+  padding-top:5px;margin-top:2px;
+}
+.sc-total .sc-label{color:#f0f0ec;font-size:12px;border-top:1px solid #383836;padding-top:5px}
+.sc-total .sc-b,.sc-total .sc-w{color:#f0f0ec;font-weight:600;border-top:1px solid #383836;padding-top:5px}
+#sc-total-b.sc-win,#sc-total-w.sc-win{color:#dcb35c}
+.sc-total .sc-b.sc-win,.sc-total .sc-w.sc-win{
+  color:#dcb35c;font-weight:700;font-size:13px;
+}
 .sc-winner{
   grid-column:1/-1;
-  display:flex;border-top:1px solid #2a2a28;
-  margin-top:3px;
+  display:flex;margin-top:1px;
 }
 .sc-res-cell{
-  flex:1;text-align:center;padding:5px 0 3px;
-  font-size:16px;font-variant-numeric:tabular-nums;
-  color:#3a3a38;
+  flex:1;text-align:center;padding:3px 0 1px;
+  font-size:13px;color:#3a3a38;
 }
 .sc-res-cell.sc-res-win{color:#dcb35c;font-weight:600}
 
@@ -623,6 +630,7 @@ function resetPhaseUI(){
   backBtn.style.display='none';
   markBar.classList.remove('visible');
   scWinner.style.display='none';
+  scTotalB.classList.remove('sc-win');scTotalW.classList.remove('sc-win');
 }
 
 /* ── Resize ── */
@@ -1056,23 +1064,11 @@ function showFinalScore(){
   scCapB.textContent=sc.capB;scCapW.textContent=sc.capW;
   scKomiVal.textContent=KOMI;
   scTotalB.textContent=sc.totalB.toFixed(1);scTotalW.textContent=sc.totalW.toFixed(1);
-  const diff=Math.abs(sc.totalB-sc.totalW).toFixed(1);
-  scResBCell.classList.remove('sc-res-win');scResWCell.classList.remove('sc-res-win');
-  if(sc.totalB>sc.totalW){
-    scResB.textContent=`${sc.totalB.toFixed(1)} +${diff}`;
-    scResW.textContent=sc.totalW.toFixed(1);
-    scResBCell.classList.add('sc-res-win');
-  } else if(sc.totalW>sc.totalB){
-    scResB.textContent=sc.totalB.toFixed(1);
-    scResW.textContent=`${sc.totalW.toFixed(1)} +${diff}`;
-    scResWCell.classList.add('sc-res-win');
-  } else {
-    scResB.textContent=sc.totalB.toFixed(1);
-    scResW.textContent=sc.totalW.toFixed(1);
-  }
-  scWinner.style.display='';
+  scTotalB.classList.remove('sc-win');scTotalW.classList.remove('sc-win');
+  if(sc.totalB>sc.totalW)scTotalB.classList.add('sc-win');
+  else if(sc.totalW>sc.totalB)scTotalW.classList.add('sc-win');
   gameOver=true;
-  backBtn.style.display=''; // дозволяємо повернутись до маркування
+  backBtn.style.display='';
   draw();
 }
 
@@ -1154,6 +1150,7 @@ backBtn.onclick=()=>{
   backBtn.style.display='none';
   markBar.classList.add('visible');
   scWinner.style.display='none';
+  scTotalB.classList.remove('sc-win');scTotalW.classList.remove('sc-win');
   scResBCell.classList.remove('sc-res-win');scResWCell.classList.remove('sc-res-win');
   passBtnEl.disabled=false;
   setMarkMode(markTerritoryMode);
