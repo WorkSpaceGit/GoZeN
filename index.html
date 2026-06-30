@@ -93,7 +93,9 @@ body{
 }
 .ctrl-btn:active{border-color:#555}
 .ctrl-btn:disabled{opacity:.25;cursor:default}
-.ctrl-btn.accent{color:#dcb35c;border-color:#dcb35c;min-width:110px;text-align:center}
+.ctrl-btn.accent{color:#dcb35c;border-color:#dcb35c}
+#finalize-btn,#back-btn{width:110px;text-align:center}
+#pass-btn{color:#dcb35c;border-color:#dcb35c}
 
 /* ── Board size selector ── */
 #size-bar{
@@ -140,7 +142,7 @@ body{
 .sc-mc-back{
   grid-column:1/-1;
   display:flex;justify-content:flex-start;
-  padding:4px 0 2px;
+  padding:5px 0 3px;
 }
 .sc-mk-btn{
   background:transparent;color:#666;
@@ -179,6 +181,33 @@ body{
   flex-shrink:0;
 }
 #clock-bar.visible{display:flex}
+
+/* ── Timer progress bar ── */
+#timer-progress{
+  display:none;height:4px;
+  background:#1a1a18;
+  position:relative;flex-shrink:0;
+  border-bottom:1px solid #333331;
+}
+#timer-progress.visible{display:block}
+#tp-b{
+  position:absolute;left:0;top:0;
+  width:50%;height:100%;
+  background:#3a2c0a;
+  transform-origin:right center;
+  transform:scaleX(1);
+  will-change:transform;
+}
+#tp-w{
+  position:absolute;right:0;top:0;
+  width:50%;height:100%;
+  background:#3a2c0a;
+  transform-origin:left center;
+  transform:scaleX(1);
+  will-change:transform;
+}
+.tp-active{background:#dcb35c}
+.tp-low{background:#c94444}
 .ck-player{display:flex;align-items:center;gap:6px}
 .ck-stone{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 .ck-stone-b{background:radial-gradient(circle at 35% 35%,#666,#111)}
@@ -221,15 +250,6 @@ body{
 .sc-total .sc-b.sc-win,.sc-total .sc-w.sc-win{
   color:#dcb35c;font-weight:700;font-size:13px;
 }
-.sc-winner{
-  grid-column:1/-1;
-  display:flex;margin-top:1px;
-}
-.sc-res-cell{
-  flex:1;text-align:center;padding:3px 0 1px;
-  font-size:13px;color:#3a3a38;
-}
-.sc-res-cell.sc-res-win{color:#dcb35c;font-weight:600}
 
 /* ── History ── */
 #history-wrap{
@@ -357,6 +377,12 @@ body{
       </div>
     </div>
 
+    <!-- Timer progress bar: Black← left | right →White, від центру -->
+    <div id="timer-progress">
+      <div id="tp-b"></div>
+      <div id="tp-w"></div>
+    </div>
+
     <!-- Score — завжди на місці -->
     <div id="score-section">
       <div id="score-block">
@@ -388,8 +414,8 @@ body{
         <!-- Marking controls: в тій самій сітці → Ч/Б точно під колонками чорних/білих -->
         <div class="sc-row" id="sc-mark-ctrl" style="display:none">
           <div class="sc-mc-label">
+            <button class="ctrl-btn accent" id="finalize-btn">Підрахувати</button>
             <button class="sc-mk-btn" id="mmb-neutral">⊘</button>
-            <button class="ctrl-btn accent" id="finalize-btn">✓ Підрахувати</button>
           </div>
           <div class="sc-b sc-mc-cell"><button class="sc-mk-btn active" id="mmb-black">Ч</button></div>
           <div class="sc-w sc-mc-cell"><button class="sc-mk-btn" id="mmb-white">Б</button></div>
@@ -399,10 +425,6 @@ body{
           <div class="sc-mc-back">
             <button class="ctrl-btn accent" id="back-btn">Редагувати</button>
           </div>
-        </div>
-        <div id="sc-winner" class="sc-winner" style="display:none">
-          <div class="sc-res-cell" id="sc-res-b-cell"><span id="sc-res-b">—</span></div>
-          <div class="sc-res-cell" id="sc-res-w-cell"><span id="sc-res-w">—</span></div>
         </div>
       </div>
     </div>
@@ -478,12 +500,10 @@ const scCapW=document.getElementById('sc-cap-w');
 const scKomiVal=document.getElementById('sc-komi-val');
 const scTotalB=document.getElementById('sc-total-b');
 const scTotalW=document.getElementById('sc-total-w');
-const scWinner=document.getElementById('sc-winner');
-const scResB=document.getElementById('sc-res-b');
-const scResW=document.getElementById('sc-res-w');
-const scResBCell=document.getElementById('sc-res-b-cell');
-const scResWCell=document.getElementById('sc-res-w-cell');
 const clockBar=document.getElementById('clock-bar');
+const timerProgress=document.getElementById('timer-progress');
+const tpB=document.getElementById('tp-b');
+const tpW=document.getElementById('tp-w');
 const ckB=document.getElementById('ck-b');
 const ckW=document.getElementById('ck-w');
 const ckMainB=document.getElementById('ck-main-b');
@@ -564,7 +584,7 @@ function updateClockUI(){
   if(wTxt!==_ckW){ckMainW.textContent=wTxt;_ckW=wTxt;}
   if(bByo!==_ckBB){ckByoB.textContent=bByo;_ckBB=bByo;}
   if(wByo!==_ckWB){ckByoW.textContent=wByo;_ckWB=wByo;}
-  // Active / low
+  // Active / low — для тексту годинника та кольорової крапки
   const bOn=timerStarted&&!gameOver&&!markingMode&&turn===BLACK;
   const wOn=timerStarted&&!gameOver&&!markingMode&&turn===WHITE;
   const bLow=bOn&&(clockB.inByo?clockB.byoT<=10:clockB.main<=30);
@@ -574,19 +594,58 @@ function updateClockUI(){
   ckB.classList.toggle('ck-low',bLow);
   ckW.classList.toggle('ck-low',wLow);
 }
+
+/* ── Progress bar: подієво-кероване, без запису transform щосекунди ── */
+let lowTO_B=null,lowTO_W=null;
+function clearLowTO(color){
+  if(color===BLACK){clearTimeout(lowTO_B);lowTO_B=null;}
+  else{clearTimeout(lowTO_W);lowTO_W=null;}
+}
+// Заморозити бар на поточному коефіцієнті (хід завершено / не активний)
+function setBarPaused(color,el,ratio){
+  clearLowTO(color);
+  el.style.transition='none';
+  el.style.transform=`scaleX(${ratio})`;
+  el.classList.remove('tp-active','tp-low');
+}
+// Запустити безперервну CSS-анімацію до 0 за durationSec — без подальших JS-записів щосекунди
+function setBarRunning(color,el,ratio,durationSec,thresholdSec){
+  el.style.transition='none';
+  el.style.transform=`scaleX(${ratio})`;
+  void el.offsetWidth; // форсуємо reflow, щоб transition стартував заново
+  el.style.transition=`transform ${Math.max(durationSec,0.05)}s linear`;
+  el.style.transform='scaleX(0)';
+  el.classList.add('tp-active');
+  // "мало часу" — один setTimeout замість опитування щосекунди
+  clearLowTO(color);
+  if(durationSec<=thresholdSec){
+    el.classList.add('tp-low');
+  } else {
+    el.classList.remove('tp-low');
+    const id=setTimeout(()=>{el.classList.add('tp-low');if(color===BLACK)lowTO_B=null;else lowTO_W=null;},(durationSec-thresholdSec)*1000);
+    if(color===BLACK)lowTO_B=id;else lowTO_W=id;
+  }
+}
+function clkRatio(p,pre){return Math.max(0,Math.min(1,p.inByo?p.byoT/pre.period:p.main/pre.main));}
 function timerTick(){
   if(gameOver||markingMode){clearInterval(timerInt);timerInt=null;return;}
-  const p=turn===BLACK?clockB:clockW;
+  const color=turn;
+  const p=color===BLACK?clockB:clockW;
+  const el=color===BLACK?tpB:tpW;
   const pre=TC[tcKey];
   if(pre.type==='f'){
     if(--p.main<=0){p.main=0;updateClockUI();onTimeExpired();return;}
   } else {
     if(!p.inByo){
-      if(--p.main<=0){p.main=0;p.inByo=true;p.byoT=pre.period;}
+      if(--p.main<=0){
+        p.main=0;p.inByo=true;p.byoT=pre.period;
+        setBarRunning(color,el,1,pre.period,10); // вхід у бьо-йомі — новий сегмент
+      }
     } else {
       if(--p.byoT<=0){
         if(--p.periods<=0){p.byoT=0;updateClockUI();onTimeExpired();return;}
         p.byoT=pre.period;
+        setBarRunning(color,el,1,pre.period,10); // період вичерпано — новий сегмент
       }
     }
   }
@@ -596,32 +655,50 @@ function onMoveMade(movedBy){
   // викликається ДО перемикання turn — movedBy = гравець, що зробив хід
   const pre=TC[tcKey];if(pre.type==='none')return;
   const p=movedBy===BLACK?clockB:clockW;
+  const moverEl=movedBy===BLACK?tpB:tpW;
   if(pre.type==='f'){p.main+=pre.inc;}          // Фішер: +інкремент
   else if(p.inByo){p.byoT=pre.period;}          // Бьо-йомі: скинути таймер періоду
+  setBarPaused(movedBy,moverEl,clkRatio(p,pre)); // бар гравця, що сходив — заморожуємо
   if(!timerStarted){
     timerStarted=true;
     timerInt=setInterval(timerTick,1000);
   }
+  // бар суперника — запускаємо безперервну анімацію на час його ходу
+  const active=movedBy===BLACK?WHITE:BLACK;
+  const ap=active===BLACK?clockB:clockW;
+  const aEl=active===BLACK?tpB:tpW;
+  setBarRunning(active,aEl,clkRatio(ap,pre),ap.inByo?ap.byoT:ap.main,ap.inByo?10:30);
 }
 function onTimeExpired(){
   clearInterval(timerInt);timerInt=null;
+  const pre=TC[tcKey];
+  setBarPaused(BLACK,tpB,clkRatio(clockB,pre));
+  setBarPaused(WHITE,tpW,clkRatio(clockW,pre));
   gameOver=true;passBtnEl.disabled=true;
   const won=turn===BLACK?WHITE:BLACK;
-  scResB.textContent=won===BLACK?'✓':'×';
-  scResW.textContent=won===WHITE?'✓':'×';
-  scResBCell.classList.toggle('sc-res-win',won===BLACK);
-  scResWCell.classList.toggle('sc-res-win',won===WHITE);
-  scWinner.style.display='';
-  scBackCtrl.style.display='contents';
+  // Результат — у тому ж рядку "Разом", без окремих іконок
+  scTotalB.textContent=won===BLACK?'час':'—';
+  scTotalW.textContent=won===WHITE?'час':'—';
+  scTotalB.classList.toggle('sc-win',won===BLACK);
+  scTotalW.classList.toggle('sc-win',won===WHITE);
+  scBackCtrl.style.display='none'; // редагувати недоречно — гра завершена через час
   updateClockUI();draw();
 }
 function setupTimer(){
   clearInterval(timerInt);timerInt=null;timerStarted=false;
   _ckB='';_ckW='';_ckBB='';_ckWB=''; // скидаємо кеш рядків годинника
+  clearLowTO(BLACK);clearLowTO(WHITE);
   const pre=TC[tcKey];
-  if(pre.type==='none'){clockBar.classList.remove('visible');return;}
+  if(pre.type==='none'){
+    clockBar.classList.remove('visible');
+    timerProgress.classList.remove('visible');
+    return;
+  }
   clockB=makeClk(pre);clockW=makeClk(pre);
   clockBar.classList.add('visible');
+  timerProgress.classList.add('visible');
+  setBarPaused(BLACK,tpB,1);
+  setBarPaused(WHITE,tpW,1);
   updateClockUI();
 }
 
@@ -649,7 +726,6 @@ function resetPhaseUI(){
   ctrlBar.style.display='';
   scMarkCtrl.style.display='none';
   scBackCtrl.style.display='none';
-  scWinner.style.display='none';
   scTotalB.classList.remove('sc-win');scTotalW.classList.remove('sc-win');
 }
 
@@ -1129,6 +1205,11 @@ passBtnEl.onclick=()=>{
   passCount++;lastMove=null;koHash=null;
   if(passCount>=2){
     clearInterval(timerInt);timerInt=null;
+    if(TC[tcKey].type!=='none'){
+      const pre=TC[tcKey];
+      setBarPaused(BLACK,tpB,clkRatio(clockB,pre));
+      setBarPaused(WHITE,tpW,clkRatio(clockW,pre));
+    }
     markingMode=true;
     deadStones=new Uint8Array(SIZE*SIZE);
     manualMarks=new Uint8Array(SIZE*SIZE);
@@ -1169,9 +1250,7 @@ backBtn.onclick=()=>{
   cachedAutoTerritory=computeAutoTerritory();
   scMarkCtrl.style.display='contents';
   scBackCtrl.style.display='none';
-  scWinner.style.display='none';
   scTotalB.classList.remove('sc-win');scTotalW.classList.remove('sc-win');
-  scResBCell.classList.remove('sc-res-win');scResWCell.classList.remove('sc-res-win');
   passBtnEl.disabled=false;
   setMarkMode(markTerritoryMode);
   updateScoreDisplay();draw();
