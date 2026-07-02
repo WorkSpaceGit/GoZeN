@@ -276,7 +276,7 @@ body{
 /* чорний хід — темний текст на золотому */
 .h-coord-b{color:#1a1008;font-size:12px;font-weight:600}
 /* білий хід — світлий текст + темна тінь для читабельності на яскравому фоні */
-.h-coord-w{color:#f0f0ec;font-size:12px;font-weight:600}
+.h-coord-w{color:#fff;font-size:12px;font-weight:700;text-shadow:0 0 1px rgba(26,16,8,.9),0 0 3px rgba(26,16,8,.55)}
 /* пас — рамка, без заливки */
 .h-pass-item{
   display:inline-flex;align-items:center;
@@ -867,10 +867,10 @@ function draw(){
         if(board[i]===EMPTY)continue;
         if(deadStones&&deadStones[i]){
           ctx.globalAlpha=.3;
-          drawStone(cxArr[x],cyArr[y],r,board[i]);
+          drawStone(cxArr[x],cyArr[y],board[i]);
           ctx.globalAlpha=1;
         } else {
-          drawStone(cxArr[x],cyArr[y],r,board[i]);
+          drawStone(cxArr[x],cyArr[y],board[i]);
         }
       }
 
@@ -888,7 +888,7 @@ function draw(){
     // hover ghost
     if(!gameOver&&!markingMode&&hoverX>=0&&board[hoverY*SIZE+hoverX]===EMPTY){
       ctx.globalAlpha=.28;
-      drawStone(cxArr[hoverX],cyArr[hoverY],r,turn);
+      drawStone(cxArr[hoverX],cyArr[hoverY],turn);
       ctx.globalAlpha=1;
     }
   });
@@ -930,35 +930,13 @@ function rebuildStoneCache(){
   stoneCache.D=D;stoneCache.cR=rb;
 }
 
-function drawStone(cx,cy,r,color){
-  // Use pre-rendered bitmap when radius matches cached size (normal gameplay + hover)
-  const expectedR=color===BLACK?stoneCache.cR:cell*.46;
-  if(stoneCache.b&&Math.abs(r-expectedR)<1){
-    const D=stoneCache.D;
-    ctx.drawImage(color===BLACK?stoneCache.b:stoneCache.w,
-      Math.round(cx-D/2),Math.round(cy-D/2),D,D);
-    return;
-  }
-  // Direct fallback: ghost/marking stones at different radius
-  const rr=color===BLACK?r*1.06:r;
-  ctx.shadowColor='rgba(0,0,0,.5)';
-  ctx.shadowBlur=rr*.35;ctx.shadowOffsetX=rr*.05;ctx.shadowOffsetY=rr*.08;
-  ctx.beginPath();ctx.arc(cx,cy,rr,0,Math.PI*2);
-  if(color===BLACK){
-    const g=ctx.createRadialGradient(cx-rr*.28,cy-rr*.32,rr*.04,cx,cy,rr);
-    g.addColorStop(0,'#707070');g.addColorStop(.38,'#2e2e2e');g.addColorStop(1,'#0c0c0c');
-    ctx.fillStyle=g;
-  } else {
-    const g=ctx.createRadialGradient(cx-rr*.28,cy-rr*.32,rr*.04,cx,cy,rr);
-    g.addColorStop(0,'#fff');g.addColorStop(.45,'#e8e8e4');g.addColorStop(1,'#b4b4b0');
-    ctx.fillStyle=g;
-  }
-  ctx.fill();
-  // явно скидаємо тінь — без save/restore
-  ctx.shadowColor='transparent';ctx.shadowBlur=0;ctx.shadowOffsetX=0;ctx.shadowOffsetY=0;
-  ctx.beginPath();ctx.arc(cx-rr*.26,cy-rr*.27,rr*.15,0,Math.PI*2);
-  ctx.fillStyle=color===BLACK?'rgba(255,255,255,.2)':'rgba(255,255,255,.72)';
-  ctx.fill();
+function drawStone(cx,cy,color){
+  // Камінь завжди малюється з готового растрового кешу (rebuildStoneCache).
+  // Кеш перебудовується при кожній зміні cell, тож окремий fallback-шлях
+  // із shadowBlur/createRadialGradient на кожен камінь щокадру був не потрібен.
+  const D=stoneCache.D;
+  ctx.drawImage(color===BLACK?stoneCache.b:stoneCache.w,
+    Math.round(cx-D/2),Math.round(cy-D/2),D,D);
 }
 
 /* ── Input ── */
@@ -986,26 +964,24 @@ canvas.addEventListener('pointermove',e=>{
 canvas.addEventListener('pointerleave',()=>{if(hoverX>=0){hoverX=-1;hoverY=-1;draw();}});
 canvas.addEventListener('pointerdown',e=>{
   const{x,y}=canvasXY(e);if(x<0)return;
-  requestAnimationFrame(()=>{
-    if(markingMode){
-      if(board[y*SIZE+x]!==EMPTY){
-        // камінь → перемикаємо всю групу як мертву/живу
-        const vis=new Uint8Array(SIZE*SIZE);
-        const{group}=groupInfo(board,x,y,board[y*SIZE+x],vis);
-        const wasDead=deadStones[y*SIZE+x]===1;
-        for(const[gx,gy]of group)deadStones[gy*SIZE+gx]=wasDead?0:1;
-        cachedAutoTerritory=computeAutoTerritory();
-      } else {
-        // порожня клітина → ручне маркування (BLACK / WHITE / NEUTRAL)
-        const i=y*SIZE+x;
-        manualMarks[i]=manualMarks[i]===markTerritoryMode?0:markTerritoryMode;
-      }
-      draw();updateScoreDisplay();
+  if(markingMode){
+    if(board[y*SIZE+x]!==EMPTY){
+      // камінь → перемикаємо всю групу як мертву/живу
+      const vis=new Uint8Array(SIZE*SIZE);
+      const{group}=groupInfo(board,x,y,board[y*SIZE+x],vis);
+      const wasDead=deadStones[y*SIZE+x]===1;
+      for(const[gx,gy]of group)deadStones[gy*SIZE+gx]=wasDead?0:1;
+      cachedAutoTerritory=computeAutoTerritory();
     } else {
-      if(gameOver||board[y*SIZE+x]!==EMPTY)return;
-      playMove(x,y);
+      // порожня клітина → ручне маркування (BLACK / WHITE / NEUTRAL)
+      const i=y*SIZE+x;
+      manualMarks[i]=manualMarks[i]===markTerritoryMode?0:markTerritoryMode;
     }
-  });
+    draw();updateScoreDisplay();
+  } else {
+    if(gameOver||board[y*SIZE+x]!==EMPTY)return;
+    playMove(x,y);
+  }
 });
 
 /* ── Game logic ── */
