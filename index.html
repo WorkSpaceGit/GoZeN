@@ -460,6 +460,11 @@ const STAR={
   19:[[3,3],[3,9],[3,15],[9,3],[9,9],[9,15],[15,3],[15,9],[15,15]]
 };
 const DX=[-1,1,0,0],DY=[0,0,-1,1]; // BFS neighbor directions
+// Ефективний devicePixelRatio, обмежений 2× — на 3×-екранах (більшість iPhone)
+// це 2.25× менше пікселів на кожен canvas-blit/fill щокадру, різниця на око
+// для плоскої графіки дошки непомітна. Використовується і тут, і в canvasXY(),
+// щоб система координат дошки і хіт-тест тапу завжди збігались.
+function getDPR(){return Math.min(window.devicePixelRatio||1,2);}
 
 let SIZE=9,KOMI=6.5;
 let board,turn,koHash,captures,history,passCount,gameOver,lastMove;
@@ -736,7 +741,7 @@ function resizeCanvas(){
   clearTimeout(_rt);
   _rt=setTimeout(()=>{
     const sr=boardSide.getBoundingClientRect();
-    const dpr=window.devicePixelRatio||1;
+    const dpr=getDPR();
     // square: fit in available space with padding already applied via CSS
     const S=Math.floor(Math.min(sr.width,sr.height));
     if(S<60)return;
@@ -943,7 +948,7 @@ function drawStone(cx,cy,color){
 function canvasXY(e){
   if(!_cachedRect)_cachedRect=canvas.getBoundingClientRect();
   const rect=_cachedRect;
-  const dpr=window.devicePixelRatio||1;
+  const dpr=getDPR();
   const px=(e.clientX-rect.left)*dpr;
   const py=(e.clientY-rect.top)*dpr;
   let x=Math.round((px-pad)/cell);
@@ -960,8 +965,8 @@ canvas.addEventListener('pointermove',e=>{
   const{x,y}=canvasXY(e);
   if(x<0){if(hoverX>=0){hoverX=-1;draw();}return;}
   if(x!==hoverX||y!==hoverY){hoverX=x;hoverY=y;draw();}
-});
-canvas.addEventListener('pointerleave',()=>{if(hoverX>=0){hoverX=-1;hoverY=-1;draw();}});
+},{passive:true});
+canvas.addEventListener('pointerleave',()=>{if(hoverX>=0){hoverX=-1;hoverY=-1;draw();}},{passive:true});
 canvas.addEventListener('pointerdown',e=>{
   const{x,y}=canvasXY(e);if(x<0)return;
   if(markingMode){
@@ -982,7 +987,7 @@ canvas.addEventListener('pointerdown',e=>{
     if(gameOver||board[y*SIZE+x]!==EMPTY)return;
     playMove(x,y);
   }
-});
+},{passive:true});
 
 /* ── Game logic ── */
 function playMove(x,y){
